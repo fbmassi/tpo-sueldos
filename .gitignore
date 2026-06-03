@@ -4,7 +4,6 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Data (los CSV no se suben a GitHub, son muy pesados)
-data/
 *.csv
 
 # VS Code
