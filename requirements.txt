@@ -1,0 +1,7 @@
+# Dependencias del pipeline de datos (descargar_datos.py + limpiar_y_unificar_datos.py)
+pandas
+numpy
+requests
+pyarrow        # leer/escribir parquet
+rapidfuzz      # normalización fuzzy de texto (Sysarmy)
+openpyxl       # leer el ITCRM (.xlsx del BCRA)

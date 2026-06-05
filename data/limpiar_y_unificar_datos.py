@@ -72,14 +72,18 @@ F_STACKOVERFLOW = RAW_DIR / "datosInternacionales.csv"
 F_DOLAR_PARQUET = RAW_DIR / "dolar_mep.parquet"
 # ITCRM (BCRA): índice de tipo de cambio real multilateral.
 F_ITCRM = RAW_DIR / "ITCRMSerie.xlsx"
+# US CPI (FRED, CPIAUCSL): inflación de EE.UU. -> ajusta USD a dólares reales.
+F_USCPI = RAW_DIR / "us_cpi.csv"
 
 # Constantes de negocio
 IPC_BASE = 4744.45  # fallback (IPC ene-2024) si no se puede leer la base real
 FUZZ_THRESHOLD = 88  # umbral de similitud para normalización fuzzy
 
-# Fecha a la que se ajustan TODOS los sueldos: pesos reales y dólares constantes.
-# Cada edición se expresa en pesos y dólares de ESTE mes, así son comparables.
-FECHA_BASE_REAL = pd.Timestamp("2026-03-01")
+# Fecha a la que se ajustan TODOS los sueldos: pesos reales (por IPC argentino)
+# y dólares reales (por US CPI). Se usa la fecha más reciente disponible (mayo
+# 2026). Nota: IPC y US CPI son mensuales con rezago, su último dato es abril
+# 2026; _valor_en_fecha toma el mes más cercano para cada serie.
+FECHA_BASE_REAL = pd.Timestamp("2026-05-01")
 
 # Un sueldo fuera de [mediana / FACTOR, mediana * FACTOR] se considera un ERROR
 # de carga evidente (p.ej. cargado en miles, en USD, o con ceros de más) y se
@@ -93,16 +97,16 @@ FACTOR_ERROR_EVIDENTE = 50
 # IMPORTANTE: debe caer dentro del rango de los datos macro (todos llegan a 2026).
 FECHA_EDICION_SYSARMY = pd.Timestamp("2026-03-01")
 
-# Columnas de CONTEXTO MACRO de la edición: son iguales para todas las personas
-# (una sola edición -> un solo valor). Se separan a contexto_edicion.parquet y
-# se unen por 'fecha_edicion'. El dataset principal queda sólo con lo que varía
-# por persona (perfil + sueldo + derivadas), más fecha_edicion como clave.
+# CONTEXTO MACROECONÓMICO: todas las variables macro del momento de cada
+# edición. Se guardan en contexto_macroeconomico.parquet (una fila por edición)
+# y se unen al dataset por 'fecha_edicion' (FK).
 COLS_CONTEXTO_EDICION = [
     "fecha_edicion", "ipc", "inflacion_mensual_pct", "dolar_mep",
-    "ripte", "cbt", "fecha_bigmac", "precio_bigmac_ars", "itcrm",
+    "ripte", "cbt", "fecha_bigmac", "precio_bigmac_ars", "itcrm", "us_cpi",
 ]
-# Columnas duplicadas exactas de otras (no aportan información).
-COLS_REDUNDANTES = ["ratio_vs_cbt", "es_outlier_sueldo"]
+# El dataset final guarda dos medidas de salario (pesos reales y USD reales),
+# las canastas básicas que cubre, perfil y FK. Se descarta el nominal.
+COLS_DESCARTAR_FINAL = ["salario_bruto_ars", "es_outlier_sueldo"]
 
 # ----------------------------------------------------------------------------
 # Logging
@@ -489,14 +493,17 @@ def leer_sysarmy_crudo(path: Path) -> pd.DataFrame | None:
 
 def _fecha_edicion_desde_nombre(nombre: str) -> pd.Timestamp | None:
     """
-    Deriva la fecha de referencia de una edición a partir del nombre de archivo
-    'YYYY.S - Sysarmy ...'. Convención: semestre 1 -> enero, semestre 2 -> julio
+    Deriva la fecha de referencia de una edición a partir del nombre de archivo.
+    Acepta tanto el formato 'sysarmy_YYYY_S.csv' como el viejo 'YYYY.S - ...'
+    (separador '_' o '.'). Convención: semestre 1 -> enero, semestre 2 -> julio
     (los meses en que Sysarmy reporta los sueldos de cada edición).
     """
-    m = re.match(r"\s*(\d{4})\.(\d)", nombre)
+    m = re.search(r"(\d{4})[._](\d)", nombre)
     if not m:
         return None
     anio, sem = int(m.group(1)), int(m.group(2))
+    if sem not in (1, 2):
+        return None
     mes = 1 if sem == 1 else 7
     return pd.Timestamp(year=anio, month=mes, day=1)
 
@@ -533,12 +540,12 @@ def limpiar_sysarmy() -> pd.DataFrame | None:
             df_ed = _limpiar_una_edicion(path, fecha)
             if df_ed is not None and len(df_ed):
                 partes.append(df_ed)
-                rep(f"  · {path.name[:9]} ({fecha.date()}): {len(df_ed)} filas limpias")
-                log.info("Edición %s (%s): %d filas", path.name[:9], fecha.date(),
+                rep(f"  · {path.stem} ({fecha.date()}): {len(df_ed)} filas limpias")
+                log.info("Edición %s (%s): %d filas", path.stem, fecha.date(),
                          len(df_ed))
         except Exception as exc:  # noqa: BLE001
             log.error("FALLO edición %s: %s", path.name, exc)
-            rep(f"  · {path.name[:9]}: ERROR {exc}")
+            rep(f"  · {path.stem}: ERROR {exc}")
 
     if not partes:
         rep("Ninguna edición se pudo procesar.")
@@ -1042,6 +1049,7 @@ def merge_fuentes(
     cbt: pd.DataFrame | None,
     bigmac: pd.DataFrame | None,
     itcrm: pd.DataFrame | None = None,
+    uscpi: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     rep_seccion("PARTE 2 — MERGE Y UNIFICACIÓN")
     if sysarmy is None or len(sysarmy) == 0:
@@ -1084,6 +1092,7 @@ def merge_fuentes(
     df = _join(df, cbt, "CBT mensual")
     df = _join(df, bigmac, "Big Mac", guardar_fecha_en="fecha_bigmac")
     df = _join(df, itcrm, "ITCRM")
+    df = _join(df, uscpi, "US CPI")
 
     df = df.drop(columns=["_mes"], errors="ignore")
     rep(f"Filas tras merge: {len(df)}; columnas: {df.shape[1]}")
@@ -1114,89 +1123,85 @@ def columnas_derivadas(df: pd.DataFrame,
 
     base_ref = base_ref or {}
     ipc_base = base_ref.get("ipc") or IPC_BASE
-    dolar_base = base_ref.get("dolar")
-    itcrm_base = base_ref.get("itcrm")
+    uscpi_base = base_ref.get("us_cpi")
+    mep_base = base_ref.get("dolar")
     fbase = base_ref.get("fecha", FECHA_BASE_REAL)
     etiqueta_base = pd.Timestamp(fbase).strftime("%Y-%m")
-    rep(f"BASE de ajuste: {etiqueta_base} (IPC={ipc_base:,.1f}, "
-        f"dólar={dolar_base}, ITCRM={itcrm_base})")
+    rep(f"BASE de ajuste: {etiqueta_base} "
+        f"(IPC={ipc_base:,.1f}, MEP={mep_base}, US_CPI={uscpi_base})")
 
     sal = df.get("salario_bruto_ars")
 
-    # 1) Sueldo en PESOS CONSTANTES de la fecha base (deflactado por IPC).
-    #    Cada edición se expresa en pesos del mismo mes -> comparables.
-    if "ipc" in df and sal is not None:
-        df["sueldo_real_ars"] = (sal * (ipc_base / df["ipc"])).round(2)
-        rep(f"sueldo_real_ars = salario * (ipc_base / ipc)  [pesos de {etiqueta_base}]")
-    # 2) USD NOMINAL del mes de la edición (lo que realmente comprabas entonces).
-    if "dolar_mep" in df and sal is not None:
-        df["sueldo_usd_nominal"] = (sal / df["dolar_mep"]).round(2)
-        rep("sueldo_usd_nominal = salario / dolar_mep  [USD del mes de la edición]")
-    # 3) USD CONSTANTES de la fecha base: el sueldo real valuado al dólar de
-    #    la base -> dólares comparables a la fecha base.
-    if dolar_base and "sueldo_real_ars" in df:
-        df["sueldo_real_usd"] = (df["sueldo_real_ars"] / dolar_base).round(2)
-        rep(f"sueldo_real_usd = sueldo_real_ars / dolar_base  [USD de {etiqueta_base}]")
-    # 4) USD ajustado por competitividad real (ITCRM), base = fecha base.
-    if itcrm_base and "sueldo_usd_nominal" in df and "itcrm" in df:
-        df["sueldo_usd_real_itcrm"] = (
-            df["sueldo_usd_nominal"] * (df["itcrm"] / itcrm_base)).round(2)
-        rep(f"sueldo_usd_real_itcrm = usd_nominal * (itcrm / {itcrm_base:.1f}) "
-            f"[USD real, base {etiqueta_base}]")
-    # Poder adquisitivo
+    # SALARIO REAL según la MONEDA NATIVA del sueldo (cobra_en_dolares):
+    #   - Si es en PESOS:  se deflacta por inflación ARGENTINA (IPC) y luego se
+    #     convierte a USD al MEP base.
+    #   - Si es en DÓLARES: se recupera el USD del mes (nominal/MEP_mes), se
+    #     deflacta por inflación de EE.UU. (US CPI) y luego se pasa a pesos al
+    #     MEP base.
+    # En ambos casos salario_real_ars / salario_real_usd = MEP_base (consistente).
+    necesarias = {"ipc", "dolar_mep", "us_cpi"}
+    if sal is not None and necesarias <= set(df.columns) and mep_base and uscpi_base:
+        cobra = df["cobra_en_dolares"].fillna(False).astype(bool)
+
+        # camino PESOS-nativo -> real en pesos por inflación argentina
+        real_ars_pesos = sal * (ipc_base / df["ipc"])
+        # camino DÓLAR-nativo -> real en USD por inflación US, luego a pesos
+        usd_edicion = sal / df["dolar_mep"]
+        real_usd_dolar = usd_edicion * (uscpi_base / df["us_cpi"])
+        real_ars_dolar = real_usd_dolar * mep_base
+
+        real_ars = real_ars_pesos.where(~cobra, real_ars_dolar)
+        df["salario_real_ars"] = real_ars.round(2)
+        df["salario_real_usd"] = (real_ars / mep_base).round(2)
+        n_usd = int(cobra.sum())
+        rep(f"salario_real_ars / salario_real_usd según moneda nativa "
+            f"({n_usd} dolarizados por US CPI, resto por IPC). "
+            f"Cociente ARS/USD = MEP_base ({mep_base:,.1f}).")
+
+    # CANASTAS BÁSICAS que cubre el salario en su propio mes (salario / CBT del
+    # momento de la encuesta). Es un ratio de valores del mismo período, así que
+    # ya es "real" y comparable entre ediciones sin necesidad de base.
     if "cbt" in df and sal is not None:
-        df["canastas_basicas_cubiertas"] = sal / df["cbt"]
-        df["ratio_vs_cbt"] = df["canastas_basicas_cubiertas"]
+        df["canastas_basicas"] = (sal / df["cbt"]).round(2)
         df["cobertura_cbt"] = pd.cut(
-            df["canastas_basicas_cubiertas"],
-            bins=[-np.inf, 1, 2, np.inf],
+            df["canastas_basicas"], bins=[-np.inf, 1, 2, np.inf],
             labels=["crítica", "ajustada", "holgada"],
         ).astype("object")
-        rep("canastas_basicas_cubiertas, ratio_vs_cbt, cobertura_cbt")
-    if "precio_bigmac_ars" in df and sal is not None:
-        df["big_macs_mensuales"] = sal / df["precio_bigmac_ars"]
-        rep("big_macs_mensuales = salario / precio_bigmac_ars")
-    if "ripte" in df and sal is not None:
-        # nominal vs nominal (mismo período): NO mezclar sueldo deflactado con
-        # RIPTE nominal, porque subestima el ratio.
-        df["ratio_vs_ripte"] = sal / df["ripte"]
-        rep("ratio_vs_ripte = salario_bruto_ars / ripte (nominal vs nominal)")
+        rep("canastas_basicas = salario_nominal / CBT del mes (+ cobertura_cbt)")
 
-
-    # es_outlier (sobre salario bruto)
-    if sal is not None:
-        q1 = sal.quantile(0.01)
-        q99 = sal.quantile(0.99)
-        df["es_outlier"] = (sal > q99) | (sal < q1)
-        rep(f"es_outlier: salario > Q99({q99:,.0f}) o < Q1({q1:,.0f})")
+    # es_outlier (sobre el salario real en pesos, ya comparable entre ediciones)
+    if "salario_real_ars" in df:
+        r = df["salario_real_ars"]
+        q1, q99 = r.quantile(0.01), r.quantile(0.99)
+        df["es_outlier"] = (r > q99) | (r < q1)
+        rep(f"es_outlier: salario_real_ars > Q99({q99:,.0f}) o < Q1({q1:,.0f})")
     return df
 
 
 # ----------------------------------------------------------------------------
 # PARTE 4: OUTPUT
 # ----------------------------------------------------------------------------
-def escribir_salidas(final: pd.DataFrame, so: pd.DataFrame | None) -> None:
+def escribir_salidas(final: pd.DataFrame, so: pd.DataFrame | None) -> pd.DataFrame:
     rep_seccion("PARTE 4 — OUTPUT FINAL")
 
-    # 1) sacar columnas redundantes (duplicados exactos)
-    quitadas = [c for c in COLS_REDUNDANTES if c in final.columns]
-    if quitadas:
-        final = final.drop(columns=quitadas)
-        rep(f"Columnas redundantes eliminadas: {quitadas}")
-
-    # 2) separar el contexto macro de la edición (normalización)
+    # 1) separar el CONTEXTO MACROECONÓMICO (una fila por edición, FK fecha_edicion)
     ctx_cols = [c for c in COLS_CONTEXTO_EDICION if c in final.columns]
     if "fecha_edicion" in final.columns and len(ctx_cols) > 1:
         contexto = (final[ctx_cols].drop_duplicates()
                     .sort_values("fecha_edicion").reset_index(drop=True))
-        guardar_parquet(contexto, PROC_DIR / "contexto_edicion.parquet",
-                        "contexto_edicion")
-        rep(f"contexto_edicion.parquet: {len(contexto)} fila(s) x "
-            f"{contexto.shape[1]} cols (macro por edición)")
-        # del principal se quita el macro pero se conserva fecha_edicion (clave)
+        guardar_parquet(contexto, PROC_DIR / "contexto_macroeconomico.parquet",
+                        "contexto_macroeconomico")
+        rep(f"contexto_macroeconomico.parquet: {len(contexto)} fila(s) x "
+            f"{contexto.shape[1]} cols (macro por edición, FK fecha_edicion)")
         a_quitar = [c for c in ctx_cols if c != "fecha_edicion"]
         final = final.drop(columns=a_quitar)
-        rep(f"Macro movido a contexto; clave de unión: 'fecha_edicion'")
+
+    # 2) descartar nominal + métricas de poder adquisitivo: el dataset final
+    #    guarda SÓLO salario_real_ars y salario_real_usd como medidas de salario.
+    descartar = [c for c in COLS_DESCARTAR_FINAL if c in final.columns]
+    if descartar:
+        final = final.drop(columns=descartar)
+        rep(f"Columnas descartadas del final (nominal + poder adq.): {descartar}")
 
     destino = PROC_DIR / "dataset_final_mercado_laboral.parquet"
     guardar_parquet(final, destino, "dataset_final")
@@ -1226,6 +1231,8 @@ def escribir_salidas(final: pd.DataFrame, so: pd.DataFrame | None) -> None:
         log.info("data_quality_report.txt escrito (%d líneas)", len(REPORTE))
     except Exception as exc:  # noqa: BLE001
         log.error("No se pudo escribir el reporte: %s", exc)
+
+    return final
 
 
 # ----------------------------------------------------------------------------
@@ -1321,15 +1328,14 @@ def main() -> None:
         ["ipc", "ipc_2016_nivgeneral", "valor", "indice"], "ipc",
         eliminar_nulos=True,
     )
+    # Nota: las series macro vienen limpias (datos oficiales/API). Se transforman
+    # en memoria para el merge pero NO se guardan parquets intermedios: los
+    # valores quedan en contexto_macroeconomico.parquet. (Ahorra disco.)
     if ipc is not None and len(ipc):
         ipc = ipc.sort_values("fecha")
         ipc["inflacion_mensual_pct"] = (ipc["ipc"].pct_change() * 100).round(2)
-        guardar_parquet(ipc, PROC_DIR / "ipc_limpio.parquet", "IPC")
 
     dolar = limpiar_dolar_historico()
-    if dolar is not None:
-        guardar_parquet(dolar, PROC_DIR / "dolar_mep_mensual_limpio.parquet",
-                        "Dólar MEP mensual")
 
     bigmac = limpiar_serie_temporal(
         F_BIGMAC, "FUENTE 4 — Big Mac Index",
@@ -1337,33 +1343,31 @@ def main() -> None:
         "precio_bigmac_ars",
         fecha_dia=True, redondear=2, eliminar_nulos=True,
     )
-    if bigmac is not None:
-        guardar_parquet(bigmac, PROC_DIR / "bigmac_limpio.parquet", "Big Mac")
 
     ripte = limpiar_serie_temporal(
         F_RIPTE, "FUENTE 5 — RIPTE",
         ["ripte", "valor", "value"], "ripte",
         no_negativos=True, imputar_media_si_menor_5=True, agregar_mensual=True,
     )
-    if ripte is not None:
-        guardar_parquet(ripte, PROC_DIR / "ripte_mensual_limpio.parquet", "RIPTE")
 
     cbt = limpiar_serie_temporal(
         F_CBT, "FUENTE 6 — CBT INDEC",
         ["cbt", "gran_buenos_aires", "valor", "value"], "cbt",
         no_negativos=True, eliminar_nulos=True,
     )
-    if cbt is not None:
-        guardar_parquet(cbt, PROC_DIR / "cbt_mensual_limpio.parquet", "CBT")
 
     itcrm = limpiar_itcrm()
-    if itcrm is not None:
-        guardar_parquet(itcrm, PROC_DIR / "itcrm_mensual_limpio.parquet", "ITCRM")
+
+    uscpi = limpiar_serie_temporal(
+        F_USCPI, "FUENTE 9 — US CPI (inflación EE.UU.)",
+        ["cpiaucsl", "us_cpi", "valor", "value"], "us_cpi",
+        eliminar_nulos=True,
+    )
 
     stackoverflow = limpiar_stackoverflow()
 
     # PARTE 2 — merge
-    final = merge_fuentes(sysarmy, ipc, dolar, ripte, cbt, bigmac, itcrm)
+    final = merge_fuentes(sysarmy, ipc, dolar, ripte, cbt, bigmac, itcrm, uscpi)
 
     # PARTE 3 — derivadas (todo ajustado a FECHA_BASE_REAL)
     base_ref = {
@@ -1371,11 +1375,12 @@ def main() -> None:
         "ipc": _valor_en_fecha(ipc, "ipc", FECHA_BASE_REAL),
         "dolar": _valor_en_fecha(dolar, "dolar_mep", FECHA_BASE_REAL),
         "itcrm": _valor_en_fecha(itcrm, "itcrm", FECHA_BASE_REAL),
+        "us_cpi": _valor_en_fecha(uscpi, "us_cpi", FECHA_BASE_REAL),
     }
     final = columnas_derivadas(final, base_ref)
 
     # PARTE 4 — output
-    escribir_salidas(final, stackoverflow)
+    final = escribir_salidas(final, stackoverflow)
 
     # ----- Resumen en consola -----
     print("\n" + "=" * 64)
@@ -1393,6 +1398,7 @@ def main() -> None:
     _info("RIPTE", ripte)
     _info("CBT", cbt)
     _info("ITCRM", itcrm)
+    _info("US CPI", uscpi)
     _info("Stack Overflow AR", stackoverflow)
     print("-" * 64)
     print(f"  DATASET FINAL: {len(final)} filas, "

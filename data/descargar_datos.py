@@ -175,6 +175,25 @@ def descargar_cbt() -> None:
 
 
 # ----------------------------------------------------------------------------
+# 6. US CPI (inflación de EE.UU. — FRED, serie CPIAUCSL)
+# ----------------------------------------------------------------------------
+def descargar_us_cpi() -> None:
+    nombre = "US CPI (inflación USD)"
+    destino = RAW_DIR / "us_cpi.csv"
+    url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL"
+    try:
+        resp = _get(url)
+        df = pd.read_csv(io.StringIO(resp.text))
+        df.columns = ["fecha", "us_cpi"]
+        df.to_csv(destino, index=False)
+        resumen[nombre] = (True, f"{len(df)} filas -> {destino.name}")
+        log.info("OK %s: %d filas guardadas en %s", nombre, len(df), destino)
+    except Exception as exc:  # noqa: BLE001
+        resumen[nombre] = (False, str(exc))
+        log.error("FALLO %s: %s", nombre, exc)
+
+
+# ----------------------------------------------------------------------------
 # Main
 # ----------------------------------------------------------------------------
 def main() -> None:
@@ -186,6 +205,7 @@ def main() -> None:
     descargar_bigmac()
     descargar_ripte()
     descargar_cbt()
+    descargar_us_cpi()
 
     # ----- Resumen final -----
     print("\n" + "=" * 60)

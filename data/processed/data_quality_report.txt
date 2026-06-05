@@ -1,15 +1,15 @@
 REPORTE DE CALIDAD DE DATOS — Pipeline ETL Mercado Laboral Tech AR
-Generado: 2026-06-04 23:07:02
+Generado: 2026-06-05 13:19:04
 
 ======================================================================
 FUENTE 1 — Sysarmy (multi-edición)
 ======================================================================
-  · 2022.2 -  (2022-07-01): 5024 filas limpias
-  · 2023.1 -  (2023-01-01): 6165 filas limpias
-  · 2023.2 -  (2023-07-01): 5485 filas limpias
-  · 2024.1 -  (2024-01-01): 5488 filas limpias
-  · 2025.1 -  (2025-01-01): 5189 filas limpias
-  · 2025.2 -  (2025-07-01): 3737 filas limpias
+  · sysarmy_2022_2 (2022-07-01): 5024 filas limpias
+  · sysarmy_2023_1 (2023-01-01): 6165 filas limpias
+  · sysarmy_2023_2 (2023-07-01): 5485 filas limpias
+  · sysarmy_2024_1 (2024-01-01): 5488 filas limpias
+  · sysarmy_2025_1 (2025-01-01): 5189 filas limpias
+  · sysarmy_2025_2 (2025-07-01): 3737 filas limpias
 TOTAL Sysarmy unificado: 31088 filas de 6 ediciones
 Ediciones: ['2022-07-01', '2023-01-01', '2023-07-01', '2024-01-01', '2025-01-01', '2025-07-01']
 
@@ -68,6 +68,17 @@ FUENTE 8 — ITCRM (competitividad real, BCRA)
 Hoja 'ITCRM y bilaterales prom. mens.'. 353 meses (1997-01-01 -> 2026-05-01)
 
 ======================================================================
+FUENTE 9 — US CPI (inflación EE.UU.)
+======================================================================
+Registros: 952 -> 951
+Columnas usadas: fecha='observation_date', valor='CPIAUCSL'
+Duplicados por fecha eliminados: 0
+Técnicas: ELIMINACIÓN de nulos (1 filas)
+Rango de fechas: 1947-01-01 -> 2026-04-01
+% faltantes ANTES: us_cpi=0.11%
+% faltantes DESPUÉS: (sin faltantes relevantes)
+
+======================================================================
 FUENTE 7 — Stack Overflow (Argentina)
 ======================================================================
 Registros: 49191 -> Argentina=222 -> con salario=160 -> final=160
@@ -84,27 +95,22 @@ Merge de series macro sobre fecha_edicion (mes más cercano):
   - CBT mensual: merge_asof nearest (cobertura 100.0%)
   - Big Mac: merge_asof nearest (cobertura 100.0%)
   - ITCRM: merge_asof nearest (cobertura 100.0%)
-Filas tras merge: 31088; columnas: 22
+  - US CPI: merge_asof nearest (cobertura 100.0%)
+Filas tras merge: 31088; columnas: 23
 
 ======================================================================
 PARTE 3 — COLUMNAS DERIVADAS
 ======================================================================
-BASE de ajuste: 2026-03 (IPC=11,031.5, dólar=1410.91, ITCRM=86.22301459605033)
-sueldo_real_ars = salario * (ipc_base / ipc)  [pesos de 2026-03]
-sueldo_usd_nominal = salario / dolar_mep  [USD del mes de la edición]
-sueldo_real_usd = sueldo_real_ars / dolar_base  [USD de 2026-03]
-sueldo_usd_real_itcrm = usd_nominal * (itcrm / 86.2) [USD real, base 2026-03]
-canastas_basicas_cubiertas, ratio_vs_cbt, cobertura_cbt
-big_macs_mensuales = salario / precio_bigmac_ars
-ratio_vs_ripte = salario_bruto_ars / ripte (nominal vs nominal)
-es_outlier: salario > Q99(8,000,000) o < Q1(76,922)
+BASE de ajuste: 2026-05 (IPC=11,336.6, MEP=1408.57, US_CPI=332.407)
+salario_real_ars / salario_real_usd según moneda nativa (8392 dolarizados por US CPI, resto por IPC). Cociente ARS/USD = MEP_base (1,408.6).
+canastas_basicas = salario_nominal / CBT del mes (+ cobertura_cbt)
+es_outlier: salario_real_ars > Q99(13,637,776) o < Q1(552,234)
 
 ======================================================================
 PARTE 4 — OUTPUT FINAL
 ======================================================================
-Columnas redundantes eliminadas: ['ratio_vs_cbt', 'es_outlier_sueldo']
-contexto_edicion.parquet: 6 fila(s) x 9 cols (macro por edición)
-Macro movido a contexto; clave de unión: 'fecha_edicion'
-dataset_final_mercado_laboral.parquet: 31088 filas, 22 columnas
-Outliers conservados dentro del dataset final (es_outlier=True): 582
+contexto_macroeconomico.parquet: 6 fila(s) x 10 cols (macro por edición, FK fecha_edicion)
+Columnas descartadas del final (nominal + poder adq.): ['salario_bruto_ars', 'es_outlier_sueldo']
+dataset_final_mercado_laboral.parquet: 31088 filas, 17 columnas
+Outliers conservados dentro del dataset final (es_outlier=True): 622
 stackoverflow_argentina_limpio.parquet: 160 filas (guardado SEPARADO, solo benchmark)
