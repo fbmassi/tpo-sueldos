@@ -1,5 +1,5 @@
 REPORTE DE CALIDAD DE DATOS — Pipeline ETL Mercado Laboral Tech AR
-Generado: 2026-06-04 22:53:47
+Generado: 2026-06-04 23:07:02
 
 ======================================================================
 FUENTE 1 — Sysarmy (multi-edición)
@@ -89,9 +89,11 @@ Filas tras merge: 31088; columnas: 22
 ======================================================================
 PARTE 3 — COLUMNAS DERIVADAS
 ======================================================================
-sueldo_real_ars = salario / (ipc / ipc_base)
-sueldo_real_usd_mep = salario / dolar_mep
-sueldo_usd_real_itcrm = usd_mep * (itcrm / 91.8) [base = última edición]
+BASE de ajuste: 2026-03 (IPC=11,031.5, dólar=1410.91, ITCRM=86.22301459605033)
+sueldo_real_ars = salario * (ipc_base / ipc)  [pesos de 2026-03]
+sueldo_usd_nominal = salario / dolar_mep  [USD del mes de la edición]
+sueldo_real_usd = sueldo_real_ars / dolar_base  [USD de 2026-03]
+sueldo_usd_real_itcrm = usd_nominal * (itcrm / 86.2) [USD real, base 2026-03]
 canastas_basicas_cubiertas, ratio_vs_cbt, cobertura_cbt
 big_macs_mensuales = salario / precio_bigmac_ars
 ratio_vs_ripte = salario_bruto_ars / ripte (nominal vs nominal)
@@ -103,6 +105,6 @@ PARTE 4 — OUTPUT FINAL
 Columnas redundantes eliminadas: ['ratio_vs_cbt', 'es_outlier_sueldo']
 contexto_edicion.parquet: 6 fila(s) x 9 cols (macro por edición)
 Macro movido a contexto; clave de unión: 'fecha_edicion'
-dataset_final_mercado_laboral.parquet: 31088 filas, 21 columnas
+dataset_final_mercado_laboral.parquet: 31088 filas, 22 columnas
 Outliers conservados dentro del dataset final (es_outlier=True): 582
 stackoverflow_argentina_limpio.parquet: 160 filas (guardado SEPARADO, solo benchmark)

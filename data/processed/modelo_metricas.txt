@@ -1,5 +1,5 @@
 REPORTE DE MODELO — Predictor de sueldos tech AR
-Generado: 2026-06-04 22:55:26
+Generado: 2026-06-04 23:08:21
 ============================================================
 Filas train/test: 2989 / 748
 Target: salario_bruto_ars (escala log1p)
@@ -35,7 +35,7 @@ Mejora del modelo vs baseline: 3.7%
 
 -- VALORES MACRO DE REFERENCIA --
   ipc                  9016.5562
-  ipc_base             4744.45
+  ipc_base             11031.5404
   dolar_mep            1285.22
   cbt                  371958.87
   precio_bigmac_ars    11800.0

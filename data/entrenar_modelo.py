@@ -54,7 +54,8 @@ MODELO_OUT = PROC_DIR / "modelo_sueldo.pkl"
 METRICAS_OUT = PROC_DIR / "modelo_metricas.txt"
 
 TARGET = "salario_bruto_ars"
-IPC_BASE = 4744.45            # IPC enero 2024 (igual que el ETL)
+IPC_BASE = 4744.45            # fallback (IPC ene-2024)
+FECHA_BASE_REAL = pd.Timestamp("2026-03-01")  # base de pesos/USD (igual que el ETL)
 ROLES_TOP_N = 20              # roles más frecuentes; el resto -> "Otro"
 TECHS_TOP_N = 15             # tecnologías con flag binario propio
 TEST_SIZE = 0.2
@@ -256,9 +257,18 @@ def main() -> None:
             return float(s.iloc[0]) if len(s) else np.nan
         return np.nan
 
+    # ipc_base = IPC de la fecha base (mar-2026) para que sueldo_real_ars salga
+    # en pesos de la misma base que el dataset.
+    ipc_base = IPC_BASE
+    ipc_path = PROC_DIR / "ipc_limpio.parquet"
+    if ipc_path.exists():
+        ipc_serie = pd.read_parquet(ipc_path).dropna(subset=["ipc"]).sort_values("fecha")
+        idx = (ipc_serie["fecha"] - FECHA_BASE_REAL).abs().idxmin()
+        ipc_base = float(ipc_serie.loc[idx, "ipc"])
+
     macro_ref = {
         "ipc": _ref("ipc"),
-        "ipc_base": IPC_BASE,
+        "ipc_base": ipc_base,
         "dolar_mep": _ref("dolar_mep"),
         "cbt": _ref("cbt"),
         "precio_bigmac_ars": _ref("precio_bigmac_ars"),

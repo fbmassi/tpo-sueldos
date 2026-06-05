@@ -74,8 +74,12 @@ F_DOLAR_PARQUET = RAW_DIR / "dolar_mep.parquet"
 F_ITCRM = RAW_DIR / "ITCRMSerie.xlsx"
 
 # Constantes de negocio
-IPC_BASE = 4744.45  # IPC de enero 2024 (base para sueldo real)
+IPC_BASE = 4744.45  # fallback (IPC ene-2024) si no se puede leer la base real
 FUZZ_THRESHOLD = 88  # umbral de similitud para normalización fuzzy
+
+# Fecha a la que se ajustan TODOS los sueldos: pesos reales y dólares constantes.
+# Cada edición se expresa en pesos y dólares de ESTE mes, así son comparables.
+FECHA_BASE_REAL = pd.Timestamp("2026-03-01")
 
 # Un sueldo fuera de [mediana / FACTOR, mediana * FACTOR] se considera un ERROR
 # de carga evidente (p.ej. cargado en miles, en USD, o con ceros de más) y se
@@ -1089,32 +1093,56 @@ def merge_fuentes(
 # ----------------------------------------------------------------------------
 # PARTE 3: COLUMNAS DERIVADAS
 # ----------------------------------------------------------------------------
-def columnas_derivadas(df: pd.DataFrame) -> pd.DataFrame:
+def _valor_en_fecha(serie: pd.DataFrame | None, col: str,
+                    fecha: pd.Timestamp) -> float | None:
+    """Valor de una serie mensual en (o más cercano a) `fecha`."""
+    if serie is None or len(serie) == 0 or col not in serie.columns:
+        return None
+    s = serie.dropna(subset=[col]).sort_values("fecha")
+    if len(s) == 0:
+        return None
+    idx = (s["fecha"] - pd.Timestamp(fecha)).abs().idxmin()
+    return float(s.loc[idx, col])
+
+
+def columnas_derivadas(df: pd.DataFrame,
+                       base_ref: dict | None = None) -> pd.DataFrame:
     rep_seccion("PARTE 3 — COLUMNAS DERIVADAS")
     if len(df) == 0:
         rep("Sin filas: no se calculan derivadas.")
         return df
 
+    base_ref = base_ref or {}
+    ipc_base = base_ref.get("ipc") or IPC_BASE
+    dolar_base = base_ref.get("dolar")
+    itcrm_base = base_ref.get("itcrm")
+    fbase = base_ref.get("fecha", FECHA_BASE_REAL)
+    etiqueta_base = pd.Timestamp(fbase).strftime("%Y-%m")
+    rep(f"BASE de ajuste: {etiqueta_base} (IPC={ipc_base:,.1f}, "
+        f"dólar={dolar_base}, ITCRM={itcrm_base})")
+
     sal = df.get("salario_bruto_ars")
 
-    # Sueldo real (ajustado por IPC base ene-2024)
+    # 1) Sueldo en PESOS CONSTANTES de la fecha base (deflactado por IPC).
+    #    Cada edición se expresa en pesos del mismo mes -> comparables.
     if "ipc" in df and sal is not None:
-        df["sueldo_real_ars"] = sal / (df["ipc"] / IPC_BASE)
-        rep("sueldo_real_ars = salario / (ipc / ipc_base)")
-    # Sueldo en USD MEP (nominal del mes de la edición)
+        df["sueldo_real_ars"] = (sal * (ipc_base / df["ipc"])).round(2)
+        rep(f"sueldo_real_ars = salario * (ipc_base / ipc)  [pesos de {etiqueta_base}]")
+    # 2) USD NOMINAL del mes de la edición (lo que realmente comprabas entonces).
     if "dolar_mep" in df and sal is not None:
-        df["sueldo_real_usd_mep"] = (sal / df["dolar_mep"]).round(2)
-        rep("sueldo_real_usd_mep = salario / dolar_mep")
-    # Sueldo en USD ajustado por competitividad real (ITCRM): permite comparar
-    # el poder de compra en dólares ENTRE ediciones, descontando si el peso
-    # estaba real-caro o real-barato. Base = edición más reciente.
-    if "itcrm" in df and "sueldo_real_usd_mep" in df:
-        base_itcrm = df.loc[df["fecha_edicion"] == df["fecha_edicion"].max(),
-                            "itcrm"].iloc[0]
+        df["sueldo_usd_nominal"] = (sal / df["dolar_mep"]).round(2)
+        rep("sueldo_usd_nominal = salario / dolar_mep  [USD del mes de la edición]")
+    # 3) USD CONSTANTES de la fecha base: el sueldo real valuado al dólar de
+    #    la base -> dólares comparables a la fecha base.
+    if dolar_base and "sueldo_real_ars" in df:
+        df["sueldo_real_usd"] = (df["sueldo_real_ars"] / dolar_base).round(2)
+        rep(f"sueldo_real_usd = sueldo_real_ars / dolar_base  [USD de {etiqueta_base}]")
+    # 4) USD ajustado por competitividad real (ITCRM), base = fecha base.
+    if itcrm_base and "sueldo_usd_nominal" in df and "itcrm" in df:
         df["sueldo_usd_real_itcrm"] = (
-            df["sueldo_real_usd_mep"] * (df["itcrm"] / base_itcrm)).round(2)
-        rep(f"sueldo_usd_real_itcrm = usd_mep * (itcrm / {base_itcrm:.1f}) "
-            "[base = última edición]")
+            df["sueldo_usd_nominal"] * (df["itcrm"] / itcrm_base)).round(2)
+        rep(f"sueldo_usd_real_itcrm = usd_nominal * (itcrm / {itcrm_base:.1f}) "
+            f"[USD real, base {etiqueta_base}]")
     # Poder adquisitivo
     if "cbt" in df and sal is not None:
         df["canastas_basicas_cubiertas"] = sal / df["cbt"]
@@ -1337,8 +1365,14 @@ def main() -> None:
     # PARTE 2 — merge
     final = merge_fuentes(sysarmy, ipc, dolar, ripte, cbt, bigmac, itcrm)
 
-    # PARTE 3 — derivadas
-    final = columnas_derivadas(final)
+    # PARTE 3 — derivadas (todo ajustado a FECHA_BASE_REAL)
+    base_ref = {
+        "fecha": FECHA_BASE_REAL,
+        "ipc": _valor_en_fecha(ipc, "ipc", FECHA_BASE_REAL),
+        "dolar": _valor_en_fecha(dolar, "dolar_mep", FECHA_BASE_REAL),
+        "itcrm": _valor_en_fecha(itcrm, "itcrm", FECHA_BASE_REAL),
+    }
+    final = columnas_derivadas(final, base_ref)
 
     # PARTE 4 — output
     escribir_salidas(final, stackoverflow)
