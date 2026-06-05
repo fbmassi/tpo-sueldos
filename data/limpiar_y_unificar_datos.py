@@ -68,6 +68,10 @@ F_RIPTE = RAW_DIR / "ripte.csv"
 # (Se descartó cbt_indec.csv porque sus valores estaban ~6x inflados.)
 F_CBT = RAW_DIR / "cbt.csv"
 F_STACKOVERFLOW = RAW_DIR / "datosInternacionales.csv"
+# Dólar con historia (bluelytics 2011-2026); el CSV de MEP sólo cubre 2026.
+F_DOLAR_PARQUET = RAW_DIR / "dolar_mep.parquet"
+# ITCRM (BCRA): índice de tipo de cambio real multilateral.
+F_ITCRM = RAW_DIR / "ITCRMSerie.xlsx"
 
 # Constantes de negocio
 IPC_BASE = 4744.45  # IPC de enero 2024 (base para sueldo real)
