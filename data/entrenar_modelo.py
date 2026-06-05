@@ -164,7 +164,16 @@ def main() -> None:
 
     df = pd.read_parquet(DATASET)
     df = df[df[TARGET].notna() & (df[TARGET] > 0)].copy()
-    log.info("Dataset: %d filas", len(df))
+
+    # Multi-edición: el modelo predice el sueldo ACTUAL (nominal), así que
+    # entrena SÓLO con la última edición. Mezclar ediciones con 10x de inflación
+    # entre medio haría que el modelo aprenda "época", no "perfil". Las ediciones
+    # anteriores quedan en el dataset para el análisis temporal, no para el modelo.
+    if "fecha_edicion" in df.columns and df["fecha_edicion"].nunique() > 1:
+        ult = df["fecha_edicion"].max()
+        df = df[df["fecha_edicion"] == ult].copy()
+        log.info("Multi-edición detectada: entreno sólo con %s", str(ult)[:10])
+    log.info("Dataset de entrenamiento: %d filas", len(df))
 
     # --- definir top roles y top techs desde los datos ---
     roles_top = df["rol"].value_counts().head(ROLES_TOP_N).index.tolist()
@@ -234,7 +243,10 @@ def main() -> None:
     contexto = None
     ctx_path = PROC_DIR / "contexto_edicion.parquet"
     if ctx_path.exists():
-        contexto = pd.read_parquet(ctx_path).iloc[0]
+        ctx_df = pd.read_parquet(ctx_path)
+        if "fecha_edicion" in ctx_df.columns:
+            ctx_df = ctx_df.sort_values("fecha_edicion")
+        contexto = ctx_df.iloc[-1]   # última edición (la que entrena el modelo)
 
     def _ref(col):
         if contexto is not None and col in contexto.index and pd.notna(contexto[col]):

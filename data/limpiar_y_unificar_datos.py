@@ -1037,6 +1037,7 @@ def merge_fuentes(
     ripte: pd.DataFrame | None,
     cbt: pd.DataFrame | None,
     bigmac: pd.DataFrame | None,
+    itcrm: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     rep_seccion("PARTE 2 — MERGE Y UNIFICACIÓN")
     if sysarmy is None or len(sysarmy) == 0:
@@ -1078,6 +1079,7 @@ def merge_fuentes(
     df = _join(df, ripte, "RIPTE mensual")
     df = _join(df, cbt, "CBT mensual")
     df = _join(df, bigmac, "Big Mac", guardar_fecha_en="fecha_bigmac")
+    df = _join(df, itcrm, "ITCRM")
 
     df = df.drop(columns=["_mes"], errors="ignore")
     rep(f"Filas tras merge: {len(df)}; columnas: {df.shape[1]}")
@@ -1199,6 +1201,82 @@ def escribir_salidas(final: pd.DataFrame, so: pd.DataFrame | None) -> None:
 
 
 # ----------------------------------------------------------------------------
+# FUENTE 3 (histórico) y FUENTE 8 (ITCRM)
+# ----------------------------------------------------------------------------
+def limpiar_dolar_historico() -> pd.DataFrame | None:
+    """
+    Dólar mensual con historia completa. Usa el parquet de bluelytics (2011-2026,
+    fuente 'Blue' como proxy de MEP, porque el CSV de MEP sólo cubre 2026 y no
+    alcanza para las ediciones viejas).
+    """
+    rep_seccion("FUENTE 3 — Dólar (Blue ≈ MEP, histórico)")
+    if F_DOLAR_PARQUET.exists():
+        try:
+            p = pd.read_parquet(F_DOLAR_PARQUET)
+            p["date"] = pd.to_datetime(p["date"], errors="coerce")
+            blue = p[p["source"].astype(str).str.lower() == "blue"].copy()
+            if len(blue) == 0:
+                blue = p.copy()
+            blue["valor"] = blue[["value_sell", "value_buy"]].mean(axis=1)
+            blue["fecha"] = blue["date"].dt.to_period("M").dt.to_timestamp()
+            out = (blue.groupby("fecha", as_index=False)["valor"].mean()
+                   .rename(columns={"valor": "dolar_mep"}))
+            out["dolar_mep"] = out["dolar_mep"].round(2)
+            out = out.sort_values("fecha").reset_index(drop=True)
+            rep(f"Fuente: {F_DOLAR_PARQUET.name} (Blue). {len(out)} meses "
+                f"({out['fecha'].min().date()} -> {out['fecha'].max().date()})")
+            return out
+        except Exception as exc:  # noqa: BLE001
+            log.error("FALLO dólar histórico: %s", exc)
+            rep(f"ERROR: {exc}")
+    # fallback: el CSV de sólo-2026
+    return limpiar_serie_temporal(
+        F_DOLAR, "FUENTE 3 — Dólar MEP (CSV fallback)",
+        ["dolar_mep", "valor", "venta", "value"], "dolar_mep",
+        fecha_dia=True, ffill=True, redondear=2, agregar_mensual=True)
+
+
+def limpiar_itcrm() -> pd.DataFrame | None:
+    """Lee el ITCRM del BCRA (hoja mensual) y lo deja como serie fecha/itcrm."""
+    rep_seccion("FUENTE 8 — ITCRM (competitividad real, BCRA)")
+    if not F_ITCRM.exists():
+        log.warning("No se encontró %s. Se omite.", F_ITCRM.name)
+        rep(f"ARCHIVO AUSENTE: {F_ITCRM.name}")
+        return None
+    try:
+        xl = pd.ExcelFile(F_ITCRM)
+        hoja = next((s for s in xl.sheet_names if "mens" in s.lower()),
+                    xl.sheet_names[0])
+        crudo = pd.read_excel(xl, sheet_name=hoja, header=None)
+        # localizar la fila de encabezado (la que tiene 'Período' e 'ITCRM')
+        hdr = 0
+        for i in range(min(12, len(crudo))):
+            fila = crudo.iloc[i].astype(str).str.lower()
+            if fila.str.contains("per").any() and fila.str.contains("itcrm").any():
+                hdr = i
+                break
+        df = pd.read_excel(xl, sheet_name=hoja, header=hdr)
+        col_f = resolver_columna(df, ["periodo", "fecha", "indice_tiempo"])
+        col_v = resolver_columna(df, ["itcrm"])
+        if col_f is None or col_v is None:
+            raise ValueError(f"No se hallaron columnas (fecha={col_f}, itcrm={col_v})")
+        out = pd.DataFrame()
+        out["fecha"] = (pd.to_datetime(df[col_f], errors="coerce")
+                        .dt.to_period("M").dt.to_timestamp())
+        out["itcrm"] = a_numero(df[col_v])
+        out = out[out["fecha"].notna() & out["itcrm"].notna()]
+        out = (out.drop_duplicates("fecha", keep="last")
+               .sort_values("fecha").reset_index(drop=True))
+        rep(f"Hoja '{hoja}'. {len(out)} meses "
+            f"({out['fecha'].min().date()} -> {out['fecha'].max().date()})")
+        return out
+    except Exception as exc:  # noqa: BLE001
+        log.error("FALLO ITCRM: %s", exc)
+        rep(f"ERROR: {exc}")
+        return None
+
+
+# ----------------------------------------------------------------------------
 # MAIN
 # ----------------------------------------------------------------------------
 def main() -> None:
@@ -1220,11 +1298,7 @@ def main() -> None:
         ipc["inflacion_mensual_pct"] = (ipc["ipc"].pct_change() * 100).round(2)
         guardar_parquet(ipc, PROC_DIR / "ipc_limpio.parquet", "IPC")
 
-    dolar = limpiar_serie_temporal(
-        F_DOLAR, "FUENTE 3 — Dólar MEP",
-        ["dolar_mep", "valor", "venta", "value"], "dolar_mep",
-        fecha_dia=True, ffill=True, redondear=2, agregar_mensual=True,
-    )
+    dolar = limpiar_dolar_historico()
     if dolar is not None:
         guardar_parquet(dolar, PROC_DIR / "dolar_mep_mensual_limpio.parquet",
                         "Dólar MEP mensual")
@@ -1254,10 +1328,14 @@ def main() -> None:
     if cbt is not None:
         guardar_parquet(cbt, PROC_DIR / "cbt_mensual_limpio.parquet", "CBT")
 
+    itcrm = limpiar_itcrm()
+    if itcrm is not None:
+        guardar_parquet(itcrm, PROC_DIR / "itcrm_mensual_limpio.parquet", "ITCRM")
+
     stackoverflow = limpiar_stackoverflow()
 
     # PARTE 2 — merge
-    final = merge_fuentes(sysarmy, ipc, dolar, ripte, cbt, bigmac)
+    final = merge_fuentes(sysarmy, ipc, dolar, ripte, cbt, bigmac, itcrm)
 
     # PARTE 3 — derivadas
     final = columnas_derivadas(final)
@@ -1280,6 +1358,7 @@ def main() -> None:
     _info("Big Mac", bigmac)
     _info("RIPTE", ripte)
     _info("CBT", cbt)
+    _info("ITCRM", itcrm)
     _info("Stack Overflow AR", stackoverflow)
     print("-" * 64)
     print(f"  DATASET FINAL: {len(final)} filas, "

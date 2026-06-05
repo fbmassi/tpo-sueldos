@@ -1,25 +1,17 @@
 REPORTE DE CALIDAD DE DATOS — Pipeline ETL Mercado Laboral Tech AR
-Generado: 2026-06-04 21:48:27
+Generado: 2026-06-04 22:53:47
 
 ======================================================================
-FUENTE 1 — Sysarmy
+FUENTE 1 — Sysarmy (multi-edición)
 ======================================================================
-Registros originales: 4939
-Registros finales: 4921
-Mapeo de columnas usado: {'provincia': 'donde_estas_trabajando', 'edad': 'tengo_edad', 'genero': 'genero', 'rol': 'trabajo_de', 'seniority': 'seniority', 'anos_experiencia_total': 'anos_de_experiencia', 'anos_empresa_actual': 'antiguedad_en_la_empresa_actual', 'tecnologias': 'lenguajes_de_programacion_o_tecnologias_que_utilices_en_tu_puesto_actual', 'salario_bruto_ars': 'ultimo_salario_mensual_o_retiro_bruto_en_pesos_argentinos', 'cobra_en_dolares': 'pagos_en_dolares', 'modalidad': 'modalidad_de_trabajo', 'tamano_empresa': 'cantidad_de_personas_en_tu_organizacion'}
-Técnicas aplicadas:
-  - provincia: ELIMINACIÓN (0 filas sin provincia)
-  - salario_bruto_ars: ELIMINACIÓN (0 filas sin sueldo)
-  - salario_bruto_ars: ELIMINACIÓN de 0 errores de carga evidentes (fuera de [65,360, 163,400,000]; mediana=3,268,000). Outliers normales conservados.
-  - edad: IMPUTACIÓN por MEDIANA (36)
-  - genero: IMPUTACIÓN por MODA ('masculino')
-  - seniority: IMPUTACIÓN por MODA ('senior')
-  - modalidad: IMPUTACIÓN por MODA ('100% remoto')
-  - tecnologias: IMPUTACIÓN con 'No especifica'
-  - duplicados: 18 eliminados (clave+timestamp / fuzzy)
-Outliers de sueldo (Q1=580,000 / Q99=12,988,600): 99 (NO eliminados)
-% faltantes ANTES (columnas originales): pluriempleo=93.56%, si_tu_sueldo_esta_dolarizado_cual_fue_el_ultimo_valor_del_dolar_que_tomaron=79.19%, tenes_guardias=76.92%, cuanto_cobras_por_guardia=76.92%, aclara_el_numero_que_ingresaste_en_el_campo_anterior=76.92%, salir_o_seguir_contestando_sobre_estudios=76.92%, algo_que_quieras_decir_sobre_tu_trabajo=75.93%, desafios_tecnicoscomo_los_preferiselegi_todas_las_opciones_que_consideres=74.14%, cuantas_horas_te_parecen_correctas_dedicarle_a_un_desafio_tecnico_asincronico=74.08%, cual_de_las_siguientes_frases_representa_mejor_tu_opinion_acerca_de_los_procesos_de_seleccion=74.04%, cual_es_la_cantidad_maxima_de_entrevistas_que_consideras_aceptable_en_un_proceso_de_seleccion=73.72%, cual_es_la_combinacion_de_entrevistas_que_consideras_mejor_en_tu_experiencia_como_candidatoa=73.72%
-% faltantes DESPUÉS: (sin faltantes relevantes)
+  · 2022.2 -  (2022-07-01): 5024 filas limpias
+  · 2023.1 -  (2023-01-01): 6165 filas limpias
+  · 2023.2 -  (2023-07-01): 5485 filas limpias
+  · 2024.1 -  (2024-01-01): 5488 filas limpias
+  · 2025.1 -  (2025-01-01): 5189 filas limpias
+  · 2025.2 -  (2025-07-01): 3737 filas limpias
+TOTAL Sysarmy unificado: 31088 filas de 6 ediciones
+Ediciones: ['2022-07-01', '2023-01-01', '2023-07-01', '2024-01-01', '2025-01-01', '2025-07-01']
 
 ======================================================================
 FUENTE 2 — IPC INDEC
@@ -33,15 +25,9 @@ Rango de fechas: 2016-04-01 -> 2026-04-01
 % faltantes DESPUÉS: (sin faltantes relevantes)
 
 ======================================================================
-FUENTE 3 — Dólar MEP
+FUENTE 3 — Dólar (Blue ≈ MEP, histórico)
 ======================================================================
-Registros: 155 -> 6
-Columnas usadas: fecha='fecha', valor='dolar_mep'
-Duplicados por fecha eliminados: 0
-Técnicas: FORWARD FILL de valores faltantes; AGREGACIÓN mensual (promedio)
-Rango de fechas: 2026-01-01 -> 2026-06-01
-% faltantes ANTES: (sin faltantes relevantes)
-% faltantes DESPUÉS: (sin faltantes relevantes)
+Fuente: dolar_mep.parquet (Blue). 186 meses (2011-01-01 -> 2026-06-01)
 
 ======================================================================
 FUENTE 4 — Big Mac Index
@@ -77,6 +63,11 @@ Rango de fechas: 2016-04-01 -> 2025-12-01
 % faltantes DESPUÉS: (sin faltantes relevantes)
 
 ======================================================================
+FUENTE 8 — ITCRM (competitividad real, BCRA)
+======================================================================
+Hoja 'ITCRM y bilaterales prom. mens.'. 353 meses (1997-01-01 -> 2026-05-01)
+
+======================================================================
 FUENTE 7 — Stack Overflow (Argentina)
 ======================================================================
 Registros: 49191 -> Argentina=222 -> con salario=160 -> final=160
@@ -92,24 +83,26 @@ Merge de series macro sobre fecha_edicion (mes más cercano):
   - RIPTE mensual: merge_asof nearest (cobertura 100.0%)
   - CBT mensual: merge_asof nearest (cobertura 100.0%)
   - Big Mac: merge_asof nearest (cobertura 100.0%)
-Filas tras merge: 4921; columnas: 21
+  - ITCRM: merge_asof nearest (cobertura 100.0%)
+Filas tras merge: 31088; columnas: 22
 
 ======================================================================
 PARTE 3 — COLUMNAS DERIVADAS
 ======================================================================
 sueldo_real_ars = salario / (ipc / ipc_base)
 sueldo_real_usd_mep = salario / dolar_mep
+sueldo_usd_real_itcrm = usd_mep * (itcrm / 91.8) [base = última edición]
 canastas_basicas_cubiertas, ratio_vs_cbt, cobertura_cbt
 big_macs_mensuales = salario / precio_bigmac_ars
 ratio_vs_ripte = salario_bruto_ars / ripte (nominal vs nominal)
-es_outlier: salario > Q99(12,988,600) o < Q1(580,000)
+es_outlier: salario > Q99(8,000,000) o < Q1(76,922)
 
 ======================================================================
 PARTE 4 — OUTPUT FINAL
 ======================================================================
 Columnas redundantes eliminadas: ['ratio_vs_cbt', 'es_outlier_sueldo']
-contexto_edicion.parquet: 1 fila(s) x 8 cols (macro por edición)
+contexto_edicion.parquet: 6 fila(s) x 9 cols (macro por edición)
 Macro movido a contexto; clave de unión: 'fecha_edicion'
-dataset_final_mercado_laboral.parquet: 4921 filas, 20 columnas
-Outliers conservados dentro del dataset final (es_outlier=True): 99
+dataset_final_mercado_laboral.parquet: 31088 filas, 21 columnas
+Outliers conservados dentro del dataset final (es_outlier=True): 582
 stackoverflow_argentina_limpio.parquet: 160 filas (guardado SEPARADO, solo benchmark)
