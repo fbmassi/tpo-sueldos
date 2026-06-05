@@ -1,0 +1,43 @@
+REPORTE DE MODELO — Predictor de sueldos tech AR
+Generado: 2026-06-04 21:45:45
+============================================================
+Filas train/test: 3936 / 985
+Target: salario_bruto_ars (escala log1p)
+Features categóricas: ['rol', 'seniority', 'provincia', 'modalidad']
+Features numéricas: 17 (exp + count + 15 techs)
+
+-- MÉTRICAS (modelo mediana P50, escala pesos) --
+R²:    0.303
+MAE:   $ 1,322,745
+RMSE:  $ 2,017,583
+MAPE:  46.7%
+Cobertura intervalo P10–P90: 76.9%  (ideal ~80%)
+
+Baseline (mediana por rol+seniority) MAE: $ 1,367,898
+Mejora del modelo vs baseline: 3.3%
+
+-- TOP 15 FEATURES (permutation importance) --
+  anos_experiencia_total         0.2619
+  rol                            0.0982
+  modalidad                      0.0353
+  tech_typescript                0.0214
+  tech_ninguno de los anteriores 0.0126
+  seniority                      0.0117
+  tech_php                       0.0108
+  tech_go                        0.0104
+  provincia                      0.0081
+  lenguajes_count                0.0058
+  tech_python                    0.0041
+  tech_java                      0.0031
+  tech_.net                      0.0029
+  tech_html                      0.0021
+  tech_javascript                0.0006
+
+-- VALORES MACRO DE REFERENCIA --
+  ipc                  11031.5404
+  ipc_base             4744.45
+  dolar_mep            1262.31
+  cbt                  423531.8
+  precio_bigmac_ars    13400.0
+  ripte                1775664.12
+  fecha_edicion        2026-03-01
