@@ -11,3 +11,6 @@ matplotlib     # gráficos
 seaborn        # gráficos estadísticos
 scipy          # estadística (Pearson, regresiones)
 scikit-learn   # modelos de regresión (Random Forest, etc.)
+
+# ── App web (app/main.py) ──
+streamlit      # interfaz web del estimador de salario
