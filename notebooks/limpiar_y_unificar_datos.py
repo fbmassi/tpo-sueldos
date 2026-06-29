@@ -29,7 +29,7 @@ Si alguna fuente falta, se loguea el problema y el pipeline continúa con el
 resto (no aborta).
 
 Ejecutar:
-    python data/limpiar_y_unificar_datos.py
+    python notebooks/limpiar_y_unificar_datos.py
 ------------------------------------------------------------------------------
 """
 
@@ -54,7 +54,8 @@ except Exception:  # pragma: no cover - rapidfuzz es requisito, pero degradamos
 # ----------------------------------------------------------------------------
 # Configuración de rutas
 # ----------------------------------------------------------------------------
-DATA_DIR = Path(__file__).resolve().parent
+# Los ejecutables viven en notebooks/; los datos en data/ (un nivel arriba).
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 RAW_DIR = DATA_DIR / "raw"
 PROC_DIR = DATA_DIR / "processed"
 

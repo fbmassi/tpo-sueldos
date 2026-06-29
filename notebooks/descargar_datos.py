@@ -17,7 +17,7 @@ SCRIPT (no tienen API pública / requieren registro o aceptar términos):
 
 Guardarlos en data/raw/ y luego correr este script:
 
-    python data/descargar_datos.py
+    python notebooks/descargar_datos.py
 ------------------------------------------------------------------------------
 
 Descargas automáticas (este script):
@@ -40,7 +40,8 @@ import requests
 # ----------------------------------------------------------------------------
 # Configuración
 # ----------------------------------------------------------------------------
-RAW_DIR = Path(__file__).resolve().parent / "raw"
+# Los ejecutables viven en notebooks/; los datos en data/ (un nivel arriba).
+RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 TIMEOUT = 60  # segundos
 
 # La API de Series de Tiempo de datos.gob.ar devuelve 100 filas por defecto;

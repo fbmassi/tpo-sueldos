@@ -15,18 +15,16 @@ Modelos comparados (técnicas de la materia):
   4. Árbol de regresión (max_depth=5)
   5. Random Forest (n_estimators=100)
 
-Split principal: aleatorio 80/20 ESTRATIFICADO por fecha_edicion.
-  Justificación: el target ya está deflactado (pesos constantes), por lo que el
-  efecto inflacionario está neutralizado. El objetivo es estimación TRANSVERSAL
-  (dado un perfil, estimar su sueldo de mercado), no forecasting temporal. El
-  split aleatorio estratificado garantiza la misma proporción de cada edición
-  en train y test, consistente con la metodología estándar.
+Split principal: TEMPORAL (sugerencia del profesor).
+  TRAIN = ediciones previas (2022-07 .. 2025-01) / TEST = última encuesta (2025-07).
+  Evalúa el caso de uso real: estimar el sueldo "de hoy" con la historia previa.
+  El modelo nunca vio la edición que predice, así que es más exigente y honesto.
 
-Validación secundaria: split TEMPORAL (train: 2022-07..2025-01 / test: 2025-07)
-  sólo para el mejor modelo, para detectar cambios estructurales de nivel
-  salarial entre períodos.
+Validación secundaria: split ALEATORIO 80/20 estratificado por fecha_edicion,
+  sólo para el mejor modelo, como contraste. Si rinde mejor que el temporal,
+  confirma un cambio estructural de nivel salarial entre períodos.
 
-Ejecutar:  python data/evaluacion_modelos.py
+Ejecutar:  python notebooks/evaluacion_modelos.py
 """
 
 from __future__ import annotations
@@ -55,7 +53,8 @@ sns.set_style("whitegrid")
 # ----------------------------------------------------------------------------
 # Configuración
 # ----------------------------------------------------------------------------
-DATA_DIR = Path(__file__).resolve().parent
+# Los ejecutables viven en notebooks/; los datos en data/ (un nivel arriba).
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PROC_DIR = DATA_DIR / "processed"
 OUT_DIR = PROC_DIR / "modelos"
 
@@ -69,8 +68,14 @@ TOP_TECHS = 20        # tecnologías con columna binaria propia
 MIN_PROVINCIA = 100   # provincias con menos registros -> "Otra"
 DPI = 300
 
+# NOTA: se EXCLUYE 'seniority' a propósito. En las ediciones 2022-2023 el
+# seniority se infirió de los años de experiencia (junior<2, ssr 2-5, sr>5), y
+# en las reales la gente se auto-clasifica casi idéntico a esos cortes -> es
+# redundante con anos_experiencia_total (años solo ≈ seniority solo, R²≈0.244).
+# Años de experiencia está al 100% y es el dato crudo siempre real, así que es
+# el eje de experiencia elegido. Se evita la multicolinealidad años↔seniority.
 COLS_NUM = ["edad", "anos_experiencia_total", "anos_empresa_actual"]
-COLS_CAT = ["provincia", "genero", "seniority", "modalidad",
+COLS_CAT = ["provincia", "genero", "modalidad",
             "tamano_empresa", "rol", "cobra_en_dolares"]
 
 ARCHIVOS: list[str] = []
@@ -118,7 +123,6 @@ def preparar_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.Ser
 
     # --- resto de categóricas directas ---
     X["genero"] = df["genero"].fillna("no especifica")
-    X["seniority"] = df["seniority"]
     X["modalidad"] = df["modalidad"]
     X["tamano_empresa"] = df["tamano_empresa"].fillna("No especifica")
     X["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)
@@ -209,15 +213,19 @@ def main() -> None:
           f"{len(cols_tech)} tecnologías multi-hot)")
 
     # ------------------------------------------------------------------
-    # SPLIT PRINCIPAL: aleatorio 80/20 estratificado por edición.
-    # El target está deflactado -> el split aleatorio es el correcto para
-    # estimación transversal (no es un problema de forecasting).
+    # SPLIT PRINCIPAL: TEMPORAL (sugerencia del profesor).
+    #   TRAIN = ediciones anteriores (2022-07 .. 2025-01)
+    #   TEST  = última encuesta (2025-07)
+    # Evalúa el caso de uso real: estimar el sueldo "de hoy" con la historia
+    # previa. Es más exigente y honesto que el aleatorio, porque el modelo
+    # nunca vio la edición que predice.
     # ------------------------------------------------------------------
-    X_tr, X_te, y_tr, y_te = train_test_split(
-        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE,
-        stratify=fechas)
-    print(f"Split aleatorio estratificado por edición: "
-          f"train={len(X_tr):,} / test={len(X_te):,}\n")
+    corte = fechas.max()
+    m_tr, m_te = fechas < corte, fechas == corte
+    X_tr, X_te = X[m_tr], X[m_te]
+    y_tr, y_te = y[m_tr], y[m_te]
+    print(f"Split TEMPORAL: train (<{str(corte)[:10]})={len(X_tr):,} / "
+          f"test (={str(corte)[:10]})={len(X_te):,}\n")
 
     # ------------------------------------------------------------------
     # Definición de los 5 modelos (cada uno con su preprocesador adecuado)
@@ -277,15 +285,17 @@ def main() -> None:
           f"(R²test={tabla.loc[mejor_nombre,'R2_test']:.3f})")
 
     # ------------------------------------------------------------------
-    # VALIDACIÓN SECUNDARIA: split temporal con el mejor modelo
-    # train: 2022-07..2025-01  /  test: 2025-07 (última edición)
+    # VALIDACIÓN SECUNDARIA: split aleatorio 80/20 estratificado por edición,
+    # con el mejor modelo. Sirve de contraste: si rinde MEJOR que el temporal,
+    # confirma que hay un cambio estructural de nivel salarial entre períodos
+    # (el modelo aprende mejor "de memoria" cuando ve todas las épocas).
     # ------------------------------------------------------------------
-    corte = fechas.max()
-    m_tr, m_te = fechas < corte, fechas == corte
-    pipe_temporal = clone(mejor)
-    res_temp = evaluar(pipe_temporal, X[m_tr], X[m_te], y[m_tr], y[m_te])
-    print(f"\nValidación temporal (train<{str(corte)[:10]} / test={str(corte)[:10]}): "
-          f"R²={res_temp['R2_test']:.3f}  RMSE=${res_temp['RMSE_test']/1e6:.2f}M")
+    X_tr_r, X_te_r, y_tr_r, y_te_r = train_test_split(
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=fechas)
+    pipe_rand = clone(mejor)
+    res_rand = evaluar(pipe_rand, X_tr_r, X_te_r, y_tr_r, y_te_r)
+    print(f"\nValidación aleatoria estratificada (contraste): "
+          f"R²={res_rand['R2_test']:.3f}  RMSE=${res_rand['RMSE_test']/1e6:.2f}M")
 
     # ------------------------------------------------------------------
     # Gráficos
@@ -373,20 +383,21 @@ def main() -> None:
     ax.legend(); ax.grid(True, alpha=0.3)
     guardar(fig, "modelos_distribucion_errores.png")
 
-    # 7 — split aleatorio vs temporal (mejor modelo)
-    res_rand = resultados[mejor_nombre]
+    # 7 — split temporal (principal) vs aleatorio (contraste) — mejor modelo
+    res_temp = resultados[mejor_nombre]   # la tabla principal usa split temporal
+    etiquetas = ["Temporal\n(principal, test=2025.2)", "Aleatorio\n(contraste)"]
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
-    axs[0].bar(["Aleatorio\nestratificado", "Temporal\n(test=2025.2)"],
-               [res_rand["RMSE_test"] / 1e6, res_temp["RMSE_test"] / 1e6],
-               color=["steelblue", "darkorange"])
+    axs[0].bar(etiquetas,
+               [res_temp["RMSE_test"] / 1e6, res_rand["RMSE_test"] / 1e6],
+               color=["darkorange", "steelblue"])
     axs[0].set_ylabel("RMSE test (millones $)"); axs[0].set_title("RMSE")
     axs[0].grid(True, alpha=0.3)
-    axs[1].bar(["Aleatorio\nestratificado", "Temporal\n(test=2025.2)"],
-               [res_rand["R2_test"], res_temp["R2_test"]],
-               color=["steelblue", "darkorange"])
+    axs[1].bar(etiquetas,
+               [res_temp["R2_test"], res_rand["R2_test"]],
+               color=["darkorange", "steelblue"])
     axs[1].set_ylabel("R² test"); axs[1].set_title("R²")
     axs[1].grid(True, alpha=0.3)
-    fig.suptitle(f"Split aleatorio vs temporal — {mejor_nombre}\n"
+    fig.suptitle(f"Split temporal (principal) vs aleatorio — {mejor_nombre}\n"
                  "(peor en temporal = cambio estructural de nivel salarial entre períodos)")
     guardar(fig, "modelos_aleatorio_vs_temporal.png")
 
@@ -394,7 +405,7 @@ def main() -> None:
     # Salida final
     # ------------------------------------------------------------------
     print("\n" + "=" * 96)
-    print("TABLA COMPARATIVA (split aleatorio 80/20 estratificado por edición)")
+    print("TABLA COMPARATIVA (split TEMPORAL — train: ediciones previas / test: 2025.2)")
     print("=" * 96)
     tt = tabla.copy()
     for c in ["RMSE_train", "RMSE_test", "MAE_train", "MAE_test"]:
@@ -418,14 +429,14 @@ def main() -> None:
     for nom, val in imp.tail(10)[::-1].items():
         print(f"   {nom:35s} {val:.3f}")
 
-    print("\nALEATORIO vs TEMPORAL (mejor modelo):")
-    print(f"   Aleatorio: R²={res_rand['R2_test']:.3f}  RMSE=${res_rand['RMSE_test']/1e6:.2f}M")
+    print("\nTEMPORAL (principal) vs ALEATORIO (contraste) — mejor modelo:")
     print(f"   Temporal : R²={res_temp['R2_test']:.3f}  RMSE=${res_temp['RMSE_test']/1e6:.2f}M")
+    print(f"   Aleatorio: R²={res_rand['R2_test']:.3f}  RMSE=${res_rand['RMSE_test']/1e6:.2f}M")
     delta = res_rand["R2_test"] - res_temp["R2_test"]
     if delta > 0.03:
-        print("   ⚠ El modelo rinde PEOR al predecir la edición 2025.2 sin haberla visto:")
-        print("     hay un cambio estructural del nivel salarial real entre períodos")
-        print("     (el 'precio de mercado' de un mismo perfil se movió).")
+        print("   ⚠ El modelo rinde PEOR al predecir la edición 2025.2 sin haberla visto")
+        print("     que al mezclar épocas: hay un cambio estructural del nivel salarial")
+        print("     real entre períodos (el 'precio de mercado' de un perfil se movió).")
     else:
         print("   ✓ Rendimiento similar: el nivel salarial real se mantuvo estable;")
         print("     un modelo entrenado con el pasado generaliza bien al presente.")

@@ -1,0 +1,65 @@
+Dataset: 31,088 filas
+Features: 29 columnas (3 numéricas, 6 categóricas, 20 tecnologías multi-hot)
+Split TEMPORAL: train (<2025-07-01)=27,351 / test (=2025-07-01)=3,737
+
+1. Lineal simple (solo exp.)     R²test=0.133  RMSEtest=$2.18M  overfit=0.76 (sin overfitting)
+2. Lineal múltiple               R²test=0.239  RMSEtest=$2.05M  overfit=0.76 (sin overfitting)
+3. Polinómica (g=2)              R²test=0.289  RMSEtest=$1.98M  overfit=0.75 (sin overfitting)
+4. Árbol (max_depth=5)           R²test=0.215  RMSEtest=$2.08M  overfit=0.77 (sin overfitting)
+5. Random Forest (100)           R²test=0.297  RMSEtest=$1.97M  overfit=0.84 (sin overfitting)
+
+🏆 MEJOR MODELO: 5. Random Forest (100) (R²test=0.297)
+
+Validación aleatoria estratificada (contraste): R²=0.326  RMSE=$2.42M
+
+Generando gráficos…
+  ✓ modelos_comparacion_rmse.png
+  ✓ modelos_comparacion_r2.png
+  ✓ modelos_predicho_vs_real.png
+  ✓ modelos_residuos.png
+  ✓ modelos_importancia_features.png
+  ✓ modelos_distribucion_errores.png
+  ✓ modelos_aleatorio_vs_temporal.png
+
+================================================================================================
+TABLA COMPARATIVA (split TEMPORAL — train: ediciones previas / test: 2025.2)
+================================================================================================
+                             RMSE_train RMSE_test MAE_train MAE_test R2_train R2_test           Overfit_ratio
+Modelo                                                                                                       
+1. Lineal simple (solo exp.)     $2.89M    $2.18M    $1.84M   $1.61M    0.110   0.133  0.76 (sin overfitting)
+2. Lineal múltiple               $2.69M    $2.05M    $1.66M   $1.49M    0.229   0.239  0.76 (sin overfitting)
+3. Polinómica (g=2)              $2.62M    $1.98M    $1.60M   $1.44M    0.268   0.289  0.75 (sin overfitting)
+4. Árbol (max_depth=5)           $2.70M    $2.08M    $1.67M   $1.54M    0.219   0.215  0.77 (sin overfitting)
+5. Random Forest (100)           $2.34M    $1.97M    $1.41M   $1.42M    0.416   0.297  0.84 (sin overfitting)
+
+Tabla guardada en /Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed/resultados_modelos.csv
+
+🏆 MEJOR MODELO: 5. Random Forest (100)
+   R² test = 0.297 | MAE test = $1.42M | overfitting: sin overfitting
+
+TOP 10 FEATURES (Random Forest):
+   anos_experiencia_total              0.410
+   edad                                0.071
+   anos_empresa_actual                 0.056
+   usa_go                              0.048
+   rol_Manager / Director              0.043
+   rol_Technical Leader                0.027
+   usa_python                          0.024
+   modalidad_100% remoto               0.020
+   provincia_CABA                      0.017
+   usa_typescript                      0.016
+
+TEMPORAL (principal) vs ALEATORIO (contraste) — mejor modelo:
+   Temporal : R²=0.297  RMSE=$1.97M
+   Aleatorio: R²=0.326  RMSE=$2.42M
+   ✓ Rendimiento similar: el nivel salarial real se mantuvo estable;
+     un modelo entrenado con el pasado generaliza bien al presente.
+
+Gráficos generados en /Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed/modelos/:
+   - modelos_comparacion_rmse.png
+   - modelos_comparacion_r2.png
+   - modelos_predicho_vs_real.png
+   - modelos_residuos.png
+   - modelos_importancia_features.png
+   - modelos_distribucion_errores.png
+   - modelos_aleatorio_vs_temporal.png

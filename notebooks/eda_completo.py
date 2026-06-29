@@ -20,7 +20,7 @@ derivadas (ratio vs RIPTE, big macs) este script:
   - deriva ratio_vs_ripte = nominal / RIPTE_mes  y  big_macs = nominal / BigMac_mes
 usando el contexto macroeconómico de cada edición.
 
-Ejecutar:  python data/eda_completo.py
+Ejecutar:  python notebooks/eda_completo.py
 """
 
 from __future__ import annotations
@@ -43,7 +43,8 @@ sns.set_style("whitegrid")
 # ----------------------------------------------------------------------------
 # Configuración
 # ----------------------------------------------------------------------------
-DATA_DIR = Path(__file__).resolve().parent
+# Los ejecutables viven en notebooks/; los datos en data/ (un nivel arriba).
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PROC_DIR = DATA_DIR / "processed"
 RAW_DIR = DATA_DIR / "raw"
 OUT_DIR = PROC_DIR / "eda"

@@ -8,7 +8,7 @@ basado en su perfil (edad, experiencia, rol, provincia, tecnologías, etc.)
 usando un modelo Random Forest entrenado en el dataset de Sysarmy.
 
 Uso:
-    python data/predictor_cli.py
+    python notebooks/predictor_cli.py
 
 Ejemplo de sesión:
     > Edad: 28
@@ -31,8 +31,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import OneHotEncoder
 
-# Configuración
-DATA_DIR = Path(__file__).resolve().parent
+# Configuración. Los ejecutables viven en notebooks/; los datos en data/.
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PROC_DIR = DATA_DIR / "processed"
 DATASET = PROC_DIR / "dataset_final_mercado_laboral.parquet"
 TARGET = "salario_real_ars"
@@ -42,8 +42,10 @@ TOP_ROLES = 15
 TOP_TECHS = 20
 MIN_PROVINCIA = 100
 
+# Se excluye 'seniority': es redundante con anos_experiencia_total (en 2022-2023
+# se infirió de los años). Mismo criterio que evaluacion_modelos.py.
 COLS_NUM = ["edad", "anos_experiencia_total", "anos_empresa_actual"]
-COLS_CAT = ["provincia", "genero", "seniority", "modalidad",
+COLS_CAT = ["provincia", "genero", "modalidad",
             "tamano_empresa", "rol", "cobra_en_dolares"]
 
 
@@ -80,7 +82,6 @@ def preparar_datos() -> tuple[pd.DataFrame, pd.Series, list[str],
 
     # Categóricas
     X["genero"] = df["genero"].fillna("no especifica")
-    X["seniority"] = df["seniority"]
     X["modalidad"] = df["modalidad"]
     X["tamano_empresa"] = df["tamano_empresa"].fillna("No especifica")
     X["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)
@@ -100,10 +101,11 @@ def preparar_datos() -> tuple[pd.DataFrame, pd.Series, list[str],
         X[col] = listas.apply(lambda s, tt=t: int(tt in s))
         cols_tech.append(col)
 
-    # Entrenar Random Forest
+    # Entrenar Random Forest (mismos hiperparámetros que evaluacion_modelos.py)
     pre = hacer_preprocesador(cols_tech)
     X_pre = pre.fit_transform(X)
-    model = RandomForestRegressor(n_estimators=100, n_jobs=-1,
+    model = RandomForestRegressor(n_estimators=100, max_depth=12,
+                                   min_samples_leaf=5, n_jobs=-1,
                                    random_state=RANDOM_STATE)
     model.fit(X_pre, y)
 
@@ -111,7 +113,6 @@ def preparar_datos() -> tuple[pd.DataFrame, pd.Series, list[str],
     opciones = {
         "provincia": sorted(X["provincia"].unique()),
         "genero": sorted(X["genero"].unique()),
-        "seniority": sorted(X["seniority"].unique()),
         "modalidad": sorted(X["modalidad"].unique()),
         "tamano_empresa": sorted(X["tamano_empresa"].unique()),
         "rol": sorted(X["rol"].unique()),
@@ -159,7 +160,6 @@ def hacer_prediccion(entrada: dict, X: pd.DataFrame, cols_tech: list[str],
         "anos_empresa_actual": entrada["anos_empresa_actual"],
         "provincia": entrada["provincia"],
         "genero": entrada["genero"],
-        "seniority": entrada["seniority"],
         "modalidad": entrada["modalidad"],
         "tamano_empresa": entrada["tamano_empresa"],
         "rol": entrada["rol"],
@@ -178,13 +178,12 @@ def hacer_prediccion(entrada: dict, X: pd.DataFrame, cols_tech: list[str],
 
 
 def comparar_similares(entrada: dict, X: pd.DataFrame, y: pd.Series) -> None:
-    """Busca profesionales similares (mismo rol, seniority, provincia)."""
+    """Busca profesionales similares (mismo rol y provincia)."""
     mask = ((X["rol"] == entrada["rol"]) &
-            (X["seniority"] == entrada["seniority"]) &
             (X["provincia"] == entrada["provincia"]))
     similares = y[mask]
     if len(similares) > 0:
-        print(f"\n  👥 Profesionales similares (mismo rol, seniority, provincia): {len(similares):,}")
+        print(f"\n  👥 Profesionales similares (mismo rol y provincia): {len(similares):,}")
         print(f"     Mediana: ${similares.median()/1e6:.2f}M")
         print(f"     Rango: ${similares.min()/1e6:.2f}M — ${similares.max()/1e6:.2f}M")
         print(f"     IQR: ${similares.quantile(0.25)/1e6:.2f}M — ${similares.quantile(0.75)/1e6:.2f}M")
@@ -200,7 +199,7 @@ def exportar_resultado(entrada: dict, pred: float) -> None:
     existe = path.exists()
     with open(path, "a", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=["fecha", "edad", "experiencia", "rol",
-                                           "seniority", "provincia", "salario_predicho"])
+                                           "provincia", "salario_predicho"])
         if not existe:
             w.writeheader()
         w.writerow({
@@ -208,7 +207,6 @@ def exportar_resultado(entrada: dict, pred: float) -> None:
             "edad": entrada["edad"],
             "experiencia": entrada["anos_experiencia_total"],
             "rol": entrada["rol"],
-            "seniority": entrada["seniority"],
             "provincia": entrada["provincia"],
             "salario_predicho": f"${pred/1e6:.2f}M",
         })
@@ -245,8 +243,6 @@ def main() -> None:
             "Provincia de trabajo:", opciones["provincia"])
         entrada["genero"] = pedir_entrada(
             "Género:", opciones["genero"])
-        entrada["seniority"] = pedir_entrada(
-            "Nivel (seniority):", opciones["seniority"])
         entrada["modalidad"] = pedir_entrada(
             "Modalidad de trabajo:", opciones["modalidad"])
         entrada["tamano_empresa"] = pedir_entrada(

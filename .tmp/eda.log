@@ -1,0 +1,34 @@
+Cargando datos…
+Dataset: 31088 filas | contexto: 6 ediciones
+Bases (mayo-2026): IPC=11,336.6  MEP=1,408.6  US_CPI=332.4
+Generando AED en /Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed/eda/
+
+  ✓ eda_01_composicion.png
+  ✓ eda_02_seniority.png
+  ✓ eda_03_experiencia.png
+  ✓ eda_04_tecnologias.png
+  ✓ eda_05_geografia.png
+  ✓ eda_06_poder_adquisitivo.png
+  ✓ eda_07_dolarizacion.png
+  ✓ eda_08_itcrm.png
+  ✓ eda_09_poder_adquisitivo_concreto.png
+  ✓ eda_10_correlaciones.png
+  ✓ eda_11_outliers.png
+  ✓ eda_12_correlaciones_categoricas.png
+
+==================================================
+✅ AED COMPLETADO
+Archivos generados en /Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed/eda:
+  - eda_01_composicion.png
+  - eda_02_seniority.png
+  - eda_03_experiencia.png
+  - eda_04_tecnologias.png
+  - eda_05_geografia.png
+  - eda_06_poder_adquisitivo.png
+  - eda_07_dolarizacion.png
+  - eda_08_itcrm.png
+  - eda_09_poder_adquisitivo_concreto.png
+  - eda_10_correlaciones.png
+  - eda_11_outliers.png
+  - eda_12_correlaciones_categoricas.png
+==================================================
