@@ -58,12 +58,20 @@ def hacer_preprocesador(cols_tech: list[str]) -> ColumnTransformer:
     ])
 
 
-def preparar_datos() -> tuple[pd.DataFrame, pd.Series, list[str],
-                               dict, RandomForestRegressor]:
-    """Carga dataset, prepara features, entrena Random Forest. Devuelve todo."""
+def preparar_datos(target: str = TARGET) -> tuple[pd.DataFrame, pd.Series,
+                                                   list[str], dict,
+                                                   RandomForestRegressor]:
+    """
+    Carga dataset, prepara features, entrena Random Forest. Devuelve todo.
+
+    `target` permite elegir la variable a predecir: por defecto
+    'salario_real_ars' (pesos), pero acepta 'salario_real_usd' (dólares) para
+    la app en inglés. Como ambos difieren sólo en una constante (el MEP base),
+    el modelo es equivalente; cambia la unidad de la predicción.
+    """
     df = pd.read_parquet(DATASET)
-    df = df[df[TARGET].notna() & (df[TARGET] > 0)].copy()
-    y = df[TARGET]
+    df = df[df[target].notna() & (df[target] > 0)].copy()
+    y = df[target]
 
     X = pd.DataFrame(index=df.index)
 
