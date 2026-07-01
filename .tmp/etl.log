@@ -1,21 +1,21 @@
-12:09:28 [INFO] Iniciando pipeline ETL. raw=/Users/francobmassi/Documents/GitHub/tpo-sueldos/data/raw  processed=/Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed
-12:09:31 [INFO] Sysarmy leído con skiprows=9 (5 columnas críticas detectadas)
-12:09:33 [INFO] Edición sysarmy_2022_2 (2022-07-01): 5024 filas
-12:09:39 [INFO] Sysarmy leído con skiprows=8 (5 columnas críticas detectadas)
-12:09:42 [INFO] Edición sysarmy_2023_1 (2023-01-01): 6165 filas
-12:09:44 [INFO] Sysarmy leído con skiprows=7 (5 columnas críticas detectadas)
-12:09:46 [INFO] Edición sysarmy_2023_2 (2023-07-01): 5485 filas
-12:09:48 [INFO] Sysarmy leído con skiprows=8 (6 columnas críticas detectadas)
-12:09:50 [INFO] Edición sysarmy_2024_1 (2024-01-01): 5488 filas
-12:09:52 [INFO] Sysarmy leído con skiprows=9 (6 columnas críticas detectadas)
-12:09:54 [INFO] Edición sysarmy_2025_1 (2025-01-01): 5189 filas
-12:09:55 [INFO] Sysarmy leído con skiprows=9 (6 columnas críticas detectadas)
-12:09:56 [INFO] Edición sysarmy_2025_2 (2025-07-01): 3737 filas
-12:09:57 [INFO] Guardado Sysarmy (31088 filas, 14 cols) -> sysarmy_limpio.parquet
-12:10:19 [INFO] Guardado Stack Overflow (Argentina) (160 filas, 12 cols) -> stackoverflow_argentina_limpio.parquet
-12:10:19 [INFO] Guardado contexto_macroeconomico (6 filas, 10 cols) -> contexto_macroeconomico.parquet
-12:10:19 [INFO] Guardado dataset_final (31088 filas, 17 cols) -> dataset_final_mercado_laboral.parquet
-12:10:19 [INFO] data_quality_report.txt escrito (114 líneas)
+18:50:16 [INFO] Iniciando pipeline ETL. raw=/Users/francobmassi/Documents/GitHub/tpo-sueldos/data/raw  processed=/Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed
+18:50:21 [INFO] Sysarmy leído con skiprows=9 (5 columnas críticas detectadas)
+18:50:28 [INFO] Edición sysarmy_2022_2 (2022-07-01): 5024 filas
+18:50:34 [INFO] Sysarmy leído con skiprows=8 (5 columnas críticas detectadas)
+18:50:38 [INFO] Edición sysarmy_2023_1 (2023-01-01): 6165 filas
+18:50:43 [INFO] Sysarmy leído con skiprows=7 (5 columnas críticas detectadas)
+18:50:46 [INFO] Edición sysarmy_2023_2 (2023-07-01): 5485 filas
+18:50:51 [INFO] Sysarmy leído con skiprows=8 (6 columnas críticas detectadas)
+18:50:53 [INFO] Edición sysarmy_2024_1 (2024-01-01): 5488 filas
+18:50:57 [INFO] Sysarmy leído con skiprows=9 (6 columnas críticas detectadas)
+18:51:00 [INFO] Edición sysarmy_2025_1 (2025-01-01): 5189 filas
+18:51:04 [INFO] Sysarmy leído con skiprows=9 (6 columnas críticas detectadas)
+18:51:08 [INFO] Edición sysarmy_2025_2 (2025-07-01): 3737 filas
+18:51:13 [INFO] Guardado Sysarmy (31088 filas, 14 cols) -> sysarmy_limpio.parquet
+18:52:14 [INFO] Guardado Stack Overflow (Argentina) (160 filas, 12 cols) -> stackoverflow_argentina_limpio.parquet
+18:52:15 [INFO] Guardado contexto_macroeconomico (6 filas, 10 cols) -> contexto_macroeconomico.parquet
+18:52:15 [INFO] Guardado dataset_final (31088 filas, 17 cols) -> dataset_final_mercado_laboral.parquet
+18:52:15 [INFO] data_quality_report.txt escrito (114 líneas)
 
 ================================================================
 RESUMEN DEL PIPELINE ETL

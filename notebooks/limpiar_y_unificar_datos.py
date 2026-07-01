@@ -321,12 +321,12 @@ MAPA_GENERO = {
     "mujer": "femenino",
     "female": "femenino",
     "f": "femenino",
-    "no binario": "otro",
-    "no binarie": "otro",
-    "otro": "otro",
-    "other": "otro",
-    "prefiero no decir": "no especifica",
-    "prefiero no responder": "no especifica",
+    "no binario": "otro / no especifica",
+    "no binarie": "otro / no especifica",
+    "otro": "otro / no especifica",
+    "other": "otro / no especifica",
+    "prefiero no decir": "otro / no especifica",
+    "prefiero no responder": "otro / no especifica",
 }
 
 ROLES_CANON = [
@@ -409,7 +409,19 @@ def normalizar_seniority(valor: str, anos_exp: float | None = None) -> str:
 
 
 def normalizar_modalidad(valor: str) -> str:
-    return _map_directo(valor, MAPA_MODALIDAD, "")
+    # El híbrido tiene PRIORIDAD: "Híbrido (presencial y remoto)" contiene las
+    # palabras 'remoto' y 'presencial', y el match por 'contiene' lo mandaba por
+    # error a "100% remoto". Se resuelve chequeando híbrido primero.
+    if pd.isna(valor):
+        return ""
+    base = quitar_acentos(str(valor)).lower().strip()
+    if "hibrid" in base or "hybrid" in base or "mixto" in base:
+        return "híbrido"
+    if "remot" in base:
+        return "100% remoto"
+    if any(w in base for w in ("presencial", "on site", "in person", "oficina")):
+        return "100% presencial"
+    return ""
 
 
 def normalizar_genero(valor: str) -> str:
@@ -674,7 +686,7 @@ def _limpiar_una_edicion(path: Path,
 
         # genero: moda
         df["genero"] = df["genero"].replace("", np.nan)
-        moda_gen = _moda(df["genero"], "no especifica")
+        moda_gen = _moda(df["genero"], "otro / no especifica")
         df["genero"] = df["genero"].fillna(moda_gen)
         tecnica.append(f"genero: IMPUTACIÓN por MODA ('{moda_gen}')")
 
