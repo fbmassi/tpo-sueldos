@@ -83,7 +83,8 @@ sel = st.multiselect("Países a comparar (Argentina siempre incluida):",
                      [PAISES[p] for p in disp],
                      default=[PAISES[p] for p in default if p in disp])
 inv = {v: k for k, v in PAISES.items()}
-med = {PAISES[p]: so[so["Country"] == p]["mensual"].median() for p in {inv[s] for s in sel}}
+paises_sel = {inv[s] for s in sel}                           # países elegidos (form SO)
+med = {PAISES[p]: so[so["Country"] == p]["mensual"].median() for p in paises_sel}
 med["Argentina"] = sys_ar                                    # <-- nuestro dato
 med = pd.Series(med).sort_values()
 
@@ -107,34 +108,38 @@ with c2:
 
 # ============================ 2) POR ROL ============================
 st.divider()
-st.subheader("Comparación por rol")
+st.subheader("Comparación por rol (contra los países seleccionados)")
 rol = st.selectbox("Rol", list(ROL_MAP.keys()))
 patrones = ROL_MAP[rol]
 mask_rol = so["DevType"].apply(lambda d: any(p in d for p in patrones))
+
+# salario de ese rol en cada país SELECCIONADO (mín. 5 casos) + Argentina (nuestro dato)
+med_rol = {}
+for p in paises_sel:
+    sub = so[(so["Country"] == p) & mask_rol]
+    if len(sub) >= 5:
+        med_rol[PAISES[p]] = sub["mensual"].median()
 ar_rol = sysd[sysd["rol"] == rol]["salario_real_usd"].median()
-mundo_rol = so[mask_rol]["mensual"].median()
-n_ar = int((sysd["rol"] == rol).sum()); n_mundo = int(mask_rol.sum())
+n_ar = int((sysd["rol"] == rol).sum())
 
 if pd.isna(ar_rol) or n_ar < 10:
     st.info(f"Pocos casos de «{rol}» en Sysarmy para comparar.")
 else:
-    d1, d2, d3 = st.columns(3)
-    d1.metric(f"{rol} — Argentina (Sysarmy)", f"USD {ar_rol:,.0f}", help=f"{n_ar} casos")
-    d2.metric(f"{rol} — Mundo (Stack Overflow)",
-              f"USD {mundo_rol:,.0f}" if not pd.isna(mundo_rol) else "—",
-              help=f"{n_mundo} casos")
-    if not pd.isna(mundo_rol):
-        d3.metric("Brecha", f"{mundo_rol/ar_rol:.1f}×",
-                  delta=f"{(mundo_rol-ar_rol):,.0f} USD", delta_color="inverse")
-    fig, ax = plt.subplots(figsize=(8, 2.2))
-    barras = {"Argentina\n(Sysarmy)": ar_rol, "Mundo\n(Stack Overflow)": mundo_rol}
-    ax.barh(list(barras.keys()), list(barras.values()),
-            color=[AMBAR, GRAY], edgecolor=BLACK)
-    for i, v in enumerate(barras.values()):
-        if not pd.isna(v):
-            ax.text(v * 1.01, i, f"USD {v:,.0f}", va="center", fontweight="bold")
-    ax.set_xlabel("Salario mediano (USD / mes)"); ax.grid(axis="x", alpha=0.3)
+    med_rol["Argentina"] = ar_rol
+    s = pd.Series(med_rol).sort_values()
+    fig, ax = plt.subplots(figsize=(9, max(2.2, len(s) * 0.5)))
+    ax.barh(s.index, s.values,
+            color=[AMBAR if p == "Argentina" else GRAY for p in s.index],
+            edgecolor=BLACK, linewidth=1)
+    for i, (p, v) in enumerate(s.items()):
+        ax.text(v * 1.01, i, f"USD {v:,.0f}", va="center", fontsize=9, fontweight="bold")
+    ax.set_xlabel("Salario mediano (USD / mes)"); ax.set_xlim(0, s.max() * 1.25)
+    ax.grid(axis="x", alpha=0.3)
+    ax.set_title(f"{rol}: Argentina vs países seleccionados", fontsize=12, fontweight="bold")
     st.pyplot(fig); plt.close(fig)
+    if len(s) > 1 and s.get("Argentina", 0) > 0:
+        st.caption(f"El techo para «{rol}» es {s.idxmax()} (USD {s.max():,.0f}), "
+                   f"{s.max()/ar_rol:.1f}× lo de Argentina (USD {ar_rol:,.0f}).")
 
 st.warning(
     "**Limitaciones:** (1) para Argentina usamos Sysarmy y para el resto Stack Overflow — "

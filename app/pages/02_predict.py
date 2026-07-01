@@ -35,6 +35,33 @@ except FileNotFoundError:
 
 tech_map = dict(zip(opciones["tecnologias"], cols_tech))
 
+MEP_BASE = 1408.57  # dólar de mayo 2026 (base del salario real)
+SO_CSV = ROOT / "data" / "raw" / "datosInternacionales.csv"
+ROL_MAP = {
+    "Developer": ["developer, full-stack", "developer, back-end", "developer, front-end",
+                  "developer, desktop", "developer, mobile", "developer, embedded"],
+    "Data Engineer": ["data engineer"], "Data Scientist": ["data scientist or machine learning"],
+    "Data Analyst": ["data or business analyst"], "Architect": ["architect, software or solutions"],
+    "QA": ["developer, qa or test"], "Infosec": ["security professional"],
+    "UX/UI Designer": ["designer"], "Project Manager": ["project manager"],
+    "Manager / Director": ["engineering manager", "senior executive"],
+}
+
+
+@st.cache_data(show_spinner=False)
+def cargar_mundo():
+    try:
+        so = pd.read_csv(SO_CSV, usecols=["DevType", "ConvertedCompYearly"], low_memory=False)
+    except (FileNotFoundError, ValueError):
+        return None
+    so = so[so["ConvertedCompYearly"].notna() & (so["ConvertedCompYearly"] > 0)].copy()
+    so["mensual"] = so["ConvertedCompYearly"] / 12
+    so["DevType"] = so["DevType"].fillna("").str.lower()
+    return so
+
+
+so_mundo = cargar_mundo()
+
 st.title("💰 Estimador de salario")
 st.caption(
     f"Random Forest entrenado con {len(X):,} respuestas de Sysarmy (2022–2025). "
@@ -96,5 +123,23 @@ if enviado:
     if len(sim) >= 5:
         st.info(f"👥 **{len(sim):,} profesionales** con el mismo rol en {prov} "
                 f"ganan, en mediana, **${sim.median()/1e6:.2f}M**.")
+
+    # ---- Comparación con el mismo rol en el mundo (USD, con tipo de cambio) ----
+    pred_usd = pred / MEP_BASE
+    patrones = ROL_MAP.get(rol, [])
+    if so_mundo is not None and patrones:
+        mask_r = so_mundo["DevType"].apply(lambda d: any(p in d for p in patrones))
+        mundo_usd = so_mundo[mask_r]["mensual"].median()
+        if not pd.isna(mundo_usd):
+            st.divider()
+            st.markdown(f"**🌍 «{rol}» en el mundo** (Stack Overflow, en dólares):")
+            w1, w2, w3 = st.columns(3)
+            w1.metric("Tu perfil (Argentina)", f"USD {pred_usd:,.0f}")
+            w2.metric("En el mundo", f"USD {mundo_usd:,.0f}")
+            w3.metric("Brecha", f"{mundo_usd/pred_usd:.1f}×",
+                      delta=f"{mundo_usd-pred_usd:,.0f} USD", delta_color="off")
+            st.caption("Salario predicho convertido a USD al dólar de mayo 2026 (≈1.409). "
+                       "El mundo suele pagar más: otra muestra y sin ajustar por costo de vida.")
+
     st.caption("⚠️ Estimación orientativa (R²≈0.30): el resto depende de la "
                "empresa, la negociación y factores no capturados.")

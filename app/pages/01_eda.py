@@ -126,40 +126,35 @@ with tab3:
         ax.set_xlabel("Salario mediano (millones $)"); ax.grid(alpha=0.3)
         st.pyplot(fig); plt.close(fig)
 
-# ---- TAB 4: evolución en el tiempo (pesos reales vs USD del momento) ----
+# ---- TAB 4: poder adquisitivo (salario ACTUAL como vara, retrocedido por índices) ----
 with tab4:
-    st.subheader("Evolución del salario en el tiempo")
-    m = df.copy()
-    m["nominal"] = m["canastas_basicas"] * m["cbt"]        # salario nominal en pesos del mes
-    m["usd_momento"] = m["nominal"] / m["dolar_mep"]       # USD al dólar de CADA edición
-    m["ratio_ripte"] = m["nominal"] / m["ripte"]
-    g = (m.groupby(m["fecha_edicion"].dt.date)
-         .agg(pesos_real=("salario_real_ars", "median"),
-              usd_momento=("usd_momento", "median"),
-              canastas=("canastas_basicas", "median"),
-              ripte=("ratio_ripte", "median")))
+    st.subheader("Evolución del poder adquisitivo (con el salario actual como referencia)")
+    st.caption("Tomamos el salario mediano de la **última encuesta** (lo más actual) y calculamos "
+               "cuánto valía en cada época del pasado según el **dólar** y el **RIPTE** de ese "
+               "momento. No se usan las medianas de las encuestas viejas (cambian de muestra): sólo "
+               "el salario más reciente + los índices macro que tenemos.")
+    ed = (df.groupby(df["fecha_edicion"].dt.date)
+          .agg(ipc=("ipc", "first"), tc=("dolar_mep", "first"),
+               ripte=("ripte", "first")))
+    ult = df["fecha_edicion"].max()
+    sub = df[df["fecha_edicion"] == ult]
+    ancla = float((sub["canastas_basicas"] * sub["cbt"]).median())   # salario nominal de hoy
+    ipc_ult = ed["ipc"].iloc[-1]
+    ed["nominal_t"] = ancla * (ed["ipc"] / ipc_ult)      # mismo poder de compra, pesos de cada época
+    ed["En dólares"] = ed["nominal_t"] / ed["tc"]
+    ed["× RIPTE"] = ed["nominal_t"] / ed["ripte"]
 
     c1, c2 = st.columns(2)
     with c1:
-        st.caption("En **pesos reales** (deflactado por IPC, base may-2026)")
-        st.line_chart(g["pesos_real"] / 1e6, y_label="Millones $")
+        st.caption("El salario de hoy, ¿cuántos **USD** valía en cada época?")
+        st.line_chart(ed["En dólares"], y_label="USD")
     with c2:
-        st.caption("En **dólares del momento** (salario ÷ dólar de cada edición)")
-        st.line_chart(g["usd_momento"], y_label="USD del mes")
-    st.warning(
-        "**No son lo mismo:** en pesos reales el salario quedó casi estancado, pero en "
-        "dólares del momento **casi se triplicó** (USD 945 → 2.257). La diferencia es el "
-        "dólar: se atrasó frente a los salarios, sobre todo desde 2024, así que un mismo "
-        "sueldo compra cada vez más dólares.")
-
-    st.subheader("Poder de compra según cada vara (base 2022.2 = 100)")
-    idx = (g / g.iloc[0] * 100).rename(columns={
-        "pesos_real": "Pesos reales (IPC)",
-        "usd_momento": "USD del momento",
-        "canastas": "Canastas básicas (CBT)",
-        "ripte": "vs mercado formal (RIPTE)"})
-    st.line_chart(idx, y_label="Índice (2022.2 = 100)")
-    st.caption("El Big Mac se omite: su dato anual desactualizado distorsiona la serie.")
+        st.caption("¿Cuántos **salarios formales (RIPTE)** representaba?")
+        st.line_chart(ed["× RIPTE"], y_label="× RIPTE")
+    st.info("El mismo salario (poder de compra de hoy) valía **muchos menos dólares en 2022–2023** "
+            "(dólar caro / cepo) y **más desde 2024** (el dólar se atrasó). Contra el RIPTE, el pico "
+            "fue enero 2024. Muestra la evolución del dólar y del salario formal usando el salario "
+            "tech actual como vara — sin el ruido de qué muestra respondió cada encuesta.")
 
 # ---- Análisis completo (PNGs generados por eda_completo.py) ----
 eda_dir = ROOT / "data" / "processed" / "eda"
