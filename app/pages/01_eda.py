@@ -18,6 +18,7 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 DATASET = ROOT / "data" / "processed" / "dataset_final_mercado_laboral.parquet"
+CONTEXTO = ROOT / "data" / "processed" / "contexto_macroeconomico.parquet"
 
 st.set_page_config(page_title="EDA — Salarios Tech", page_icon="📊",
                    layout="wide")
@@ -25,7 +26,9 @@ st.set_page_config(page_title="EDA — Salarios Tech", page_icon="📊",
 
 @st.cache_data(show_spinner="Cargando datos…")
 def cargar() -> pd.DataFrame:
-    return pd.read_parquet(DATASET)
+    df = pd.read_parquet(DATASET)
+    ctx = pd.read_parquet(CONTEXTO)
+    return df.merge(ctx, on="fecha_edicion", how="left")
 
 
 def fmt_m(x, _p=None) -> str:
@@ -51,8 +54,9 @@ k4.metric("Cobran en USD", f"{df['cobra_en_dolares'].mean()*100:.0f}%")
 
 st.divider()
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Distribución", "Salario por factor", "Tecnologías", "Evolución temporal"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Distribución", "Salario por factor", "Tecnologías", "Evolución temporal",
+     "Poder de compra en el tiempo"])
 
 # ---- TAB 1: distribución general ----
 with tab1:
@@ -141,6 +145,25 @@ with tab4:
         st.line_chart(g["USD"], y_label="USD")
     st.info("En pesos reales el poder de compra se mantuvo ~estable, pero en "
             "dólares reales casi se duplicó entre 2022 y 2025.")
+
+# ---- TAB 5: poder de compra en distintas varas ----
+with tab5:
+    st.subheader("¿Cuánto compra el salario, según cada vara? (base 2022.2 = 100)")
+    m = df.copy()
+    m["nominal"] = m["canastas_basicas"] * m["cbt"]        # nominal en pesos del mes
+    m["ratio_ripte"] = m["nominal"] / m["ripte"]
+    g = (m.groupby(m["fecha_edicion"].dt.date)
+         .agg(real=("salario_real_ars", "median"),
+              canastas=("canastas_basicas", "median"),
+              ripte=("ratio_ripte", "median")))
+    idx = (g / g.iloc[0] * 100).rename(columns={
+        "real": "Salario real (IPC/US CPI)",
+        "canastas": "Poder de compra (canastas CBT)",
+        "ripte": "Salario vs mercado formal (RIPTE)"})
+    st.line_chart(idx, y_label="Índice (2022.2 = 100)")
+    st.info("El salario tocó un pico en 2024.1 tras la devaluación (vs RIPTE saltó a 169: "
+            "los devs se despegaron del salario formal) y se recuperó hacia 2025.2. "
+            "El Big Mac se omite: su dato anual desactualizado distorsiona la serie.")
 
 # ---- Análisis completo (PNGs generados por eda_completo.py) ----
 eda_dir = ROOT / "data" / "processed" / "eda"
