@@ -23,7 +23,7 @@ st.set_page_config(page_title="Salarios Tech AR", page_icon="💰", layout="wide
 
 
 @st.cache_data(show_spinner=False)
-def cargar() -> pd.DataFrame | None:
+def cargar(ver: float) -> pd.DataFrame | None:
     return pd.read_parquet(DATASET) if DATASET.exists() else None
 
 
@@ -35,7 +35,7 @@ def inicio() -> None:
         "partir de **6 ediciones de la encuesta de Sysarmy (2022–2025)**, "
         "ajustados por inflación a **valores reales de mayo 2026**."
     )
-    df = cargar()
+    df = cargar(DATASET.stat().st_mtime if DATASET.exists() else 0.0)
     if df is None:
         st.warning("Falta el dataset. Corré `python notebooks/limpiar_y_unificar_datos.py`.")
     else:

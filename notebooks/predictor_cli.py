@@ -89,7 +89,7 @@ def preparar_datos(target: str = TARGET) -> tuple[pd.DataFrame, pd.Series,
     X["rol"] = df["rol"].where(df["rol"].isin(top_roles), "Otro")
 
     # Categóricas
-    X["genero"] = df["genero"].fillna("no especifica")
+    X["genero"] = df["genero"].fillna("otro / no especifica")
     X["modalidad"] = df["modalidad"]
     X["tamano_empresa"] = df["tamano_empresa"].fillna("No especifica")
     X["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)

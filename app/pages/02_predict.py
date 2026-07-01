@@ -22,12 +22,13 @@ import predictor_cli as pc  # noqa: E402
 
 
 @st.cache_resource(show_spinner="Entrenando el modelo (sólo la primera vez)…")
-def cargar_modelo():
+def cargar_modelo(ver: float):
+    # `ver` = fecha de modificación del dataset: invalida el caché al regenerarlo.
     return pc.preparar_datos()  # (X, y, cols_tech, opciones, (pre, model))
 
 
 try:
-    X, y, cols_tech, opciones, pre_model = cargar_modelo()
+    X, y, cols_tech, opciones, pre_model = cargar_modelo(pc.DATASET.stat().st_mtime)
 except FileNotFoundError:
     st.error("No encuentro el dataset. Corré antes "
              "`python notebooks/limpiar_y_unificar_datos.py`")

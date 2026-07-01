@@ -21,7 +21,7 @@ DATASET = ROOT / "data" / "processed" / "dataset_final_mercado_laboral.parquet"
 CONTEXTO = ROOT / "data" / "processed" / "contexto_macroeconomico.parquet"
 
 @st.cache_data(show_spinner="Cargando datos…")
-def cargar() -> pd.DataFrame:
+def cargar(ver: float) -> pd.DataFrame:
     df = pd.read_parquet(DATASET)
     ctx = pd.read_parquet(CONTEXTO)
     return df.merge(ctx, on="fecha_edicion", how="left")
@@ -32,7 +32,7 @@ def fmt_m(x, _p=None) -> str:
 
 
 try:
-    df = cargar()
+    df = cargar(DATASET.stat().st_mtime)
 except FileNotFoundError:
     st.error("No encuentro el dataset. Corré antes "
              "`python notebooks/limpiar_y_unificar_datos.py`")
@@ -50,9 +50,8 @@ k4.metric("Cobran en USD", f"{df['cobra_en_dolares'].mean()*100:.0f}%")
 
 st.divider()
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Distribución", "Salario por factor", "Tecnologías", "Evolución temporal",
-     "Poder de compra en el tiempo"])
+tab1, tab2, tab3 = st.tabs(
+    ["Distribución", "Salario por factor", "Tecnologías"])
 
 # ---- TAB 1: distribución general ----
 with tab1:
@@ -82,22 +81,32 @@ with tab2:
         "Ver salario según…",
         ["rol", "provincia", "seniority", "modalidad", "tamano_empresa",
          "genero", "cobra_en_dolares"])
+    min_n = st.slider("Mínimo de respuestas por categoría", 10, 300, 50, step=10,
+                      help="Evita mostrar categorías con muy pocos casos, no representativas.")
     sub = df[df["salario_real_ars"] < df["salario_real_ars"].quantile(0.99)]
-    # ordenar categorías por mediana, top 12
-    orden = (sub.groupby(factor)["salario_real_ars"].median()
-             .sort_values(ascending=False).head(12).index.tolist())
-    datos = [sub[sub[factor] == cat]["salario_real_ars"].values / 1e6
-             for cat in orden]
-    fig, ax = plt.subplots(figsize=(10, max(3, len(orden) * 0.45)))
-    ax.boxplot(datos, vert=False, tick_labels=orden, showfliers=False)
-    ax.set_xlabel("Salario real (millones $)")
-    ax.invert_yaxis(); ax.grid(alpha=0.3)
-    st.pyplot(fig); plt.close(fig)
 
-    tabla = (sub.groupby(factor)["salario_real_ars"]
-             .agg(n="size", mediana="median").sort_values("mediana", ascending=False))
-    tabla["mediana"] = (tabla["mediana"] / 1e6).round(2)
-    st.dataframe(tabla.head(12), width="stretch")
+    # sólo categorías con suficientes casos, luego ordenadas por mediana (top 12)
+    conteo = sub[factor].value_counts()
+    validas = conteo[conteo >= min_n].index
+    orden = (sub[sub[factor].isin(validas)].groupby(factor)["salario_real_ars"]
+             .median().sort_values(ascending=False).head(12).index.tolist())
+
+    if not orden:
+        st.info("No hay categorías con esa cantidad mínima de casos. Bajá el umbral.")
+    else:
+        datos = [sub[sub[factor] == cat]["salario_real_ars"].values / 1e6 for cat in orden]
+        fig, ax = plt.subplots(figsize=(10, max(3, len(orden) * 0.45)))
+        ax.boxplot(datos, vert=False, tick_labels=orden, showfliers=False)
+        ax.set_xlabel("Salario real (millones $)")
+        ax.invert_yaxis(); ax.grid(alpha=0.3)
+        st.pyplot(fig); plt.close(fig)
+        st.caption(f"Sólo categorías con ≥ {min_n} respuestas (las de 1–2 casos no son "
+                   "representativas).")
+
+        tabla = (sub[sub[factor].isin(validas)].groupby(factor)["salario_real_ars"]
+                 .agg(Casos="size", Mediana="median").sort_values("Mediana", ascending=False))
+        tabla["Mediana"] = (tabla["Mediana"] / 1e6).round(2)
+        st.dataframe(tabla.head(12), width="stretch")
 
 # ---- TAB 3: tecnologías ----
 with tab3:
@@ -126,35 +135,28 @@ with tab3:
         ax.set_xlabel("Salario mediano (millones $)"); ax.grid(alpha=0.3)
         st.pyplot(fig); plt.close(fig)
 
-# ---- TAB 4: poder adquisitivo (salario ACTUAL como vara, retrocedido por índices) ----
-with tab4:
-    st.subheader("Evolución del poder adquisitivo (con el salario actual como referencia)")
-    st.caption("Tomamos el salario mediano de la **última encuesta** (lo más actual) y calculamos "
-               "cuánto valía en cada época del pasado según el **dólar** y el **RIPTE** de ese "
-               "momento. No se usan las medianas de las encuestas viejas (cambian de muestra): sólo "
-               "el salario más reciente + los índices macro que tenemos.")
-    ed = (df.groupby(df["fecha_edicion"].dt.date)
-          .agg(ipc=("ipc", "first"), tc=("dolar_mep", "first"),
-               ripte=("ripte", "first")))
-    ult = df["fecha_edicion"].max()
-    sub = df[df["fecha_edicion"] == ult]
-    ancla = float((sub["canastas_basicas"] * sub["cbt"]).median())   # salario nominal de hoy
-    ipc_ult = ed["ipc"].iloc[-1]
-    ed["nominal_t"] = ancla * (ed["ipc"] / ipc_ult)      # mismo poder de compra, pesos de cada época
-    ed["En dólares"] = ed["nominal_t"] / ed["tc"]
-    ed["× RIPTE"] = ed["nominal_t"] / ed["ripte"]
-
-    c1, c2 = st.columns(2)
-    with c1:
-        st.caption("El salario de hoy, ¿cuántos **USD** valía en cada época?")
-        st.line_chart(ed["En dólares"], y_label="USD")
-    with c2:
-        st.caption("¿Cuántos **salarios formales (RIPTE)** representaba?")
-        st.line_chart(ed["× RIPTE"], y_label="× RIPTE")
-    st.info("El mismo salario (poder de compra de hoy) valía **muchos menos dólares en 2022–2023** "
-            "(dólar caro / cepo) y **más desde 2024** (el dólar se atrasó). Contra el RIPTE, el pico "
-            "fue enero 2024. Muestra la evolución del dólar y del salario formal usando el salario "
-            "tech actual como vara — sin el ruido de qué muestra respondió cada encuesta.")
+    st.subheader("¿Qué stack usa cada seniority?")
+    st.caption("% de profesionales de cada nivel que usan cada tecnología (top 12).")
+    orden_sen = [s for s in ["junior", "semi-senior", "senior"]
+                 if s in df["seniority"].unique()]
+    top_st = freq.head(12).index
+    tot = df["seniority"].value_counts()
+    uso = (techs[techs["t"].isin(top_st)]
+           .groupby(["seniority", "t"]).size().unstack(fill_value=0))
+    uso = (uso.div(tot, axis=0) * 100).reindex(orden_sen)[top_st]
+    fig, ax = plt.subplots(figsize=(11, 3.2))
+    im = ax.imshow(uso.values, cmap="YlGnBu", aspect="auto")
+    ax.set_xticks(range(len(top_st))); ax.set_xticklabels(top_st, rotation=40, ha="right")
+    ax.set_yticks(range(len(orden_sen))); ax.set_yticklabels(orden_sen)
+    for i in range(uso.shape[0]):
+        for j in range(uso.shape[1]):
+            v = uso.values[i, j]
+            ax.text(j, i, f"{v:.0f}", ha="center", va="center", fontsize=8,
+                    color="white" if v > uso.values.max() * 0.55 else "black")
+    fig.colorbar(im, ax=ax, label="% de uso", fraction=0.025)
+    st.pyplot(fig); plt.close(fig)
+    st.caption("Comparando junior vs senior se ve qué tecnologías se concentran en cada nivel "
+               "(p. ej. si los seniors migran más a backend/infra).")
 
 # ---- Análisis completo (PNGs generados por eda_completo.py) ----
 eda_dir = ROOT / "data" / "processed" / "eda"

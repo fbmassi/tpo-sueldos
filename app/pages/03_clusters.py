@@ -29,15 +29,15 @@ PALETA = ["#2E86C1", "#E6A100", "#8C8C8C", "#0A0A0A", "#C0392B", "#27AE60",
 
 
 @st.cache_data(show_spinner="Cargando datos…")
-def cargar() -> pd.DataFrame:
+def cargar(ver: float) -> pd.DataFrame:
     df = pd.read_parquet(DATASET)
     df["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)
     return df
 
 
 @st.cache_resource(show_spinner="Calculando segmentos…")
-def entrenar(k: int):
-    df = cargar()
+def entrenar(k: int, ver: float):
+    df = cargar(ver)
     pre = ColumnTransformer([("n", StandardScaler(), NUM),
                              ("c", OneHotEncoder(handle_unknown="ignore"), CAT)])
     Xp = pre.fit_transform(df[NUM + CAT])
@@ -48,35 +48,42 @@ def entrenar(k: int):
 
 
 def nombrar(df: pd.DataFrame) -> dict:
-    """Nombre descriptivo de cada cluster según su perfil típico."""
+    """
+    Nombre descriptivo de cada cluster combinando NIVEL (por experiencia) y un
+    RASGO distintivo (dolarizado / corporativo / empresa grande / local). Así
+    hay nombres variados y únicos aunque haya muchos segmentos.
+    """
     p = df.groupby("cluster").agg(
         exp=("anos_experiencia_total", "median"),
         usd=("cobra_en_dolares", lambda s: (s == "True").mean()),
         ant=("anos_empresa_actual", "median"),
-        sal=("salario_real_ars", "median"))
-    top_sal = p["sal"].idxmax()
+        hib=("modalidad", lambda s: (s == "híbrido").mean()),
+        pres=("modalidad", lambda s: (s == "100% presencial").mean()))
     nombres, usados = {}, set()
     for c in p.index:
-        e, u, a = p.loc[c, "exp"], p.loc[c, "usd"], p.loc[c, "ant"]
-        if e < 7 and u > 0.6:
-            n = "🌎 Exportador joven (USD)"
-        elif e < 7:
-            n = "🌱 Dev local junior"
-        elif c == top_sal:
-            n = "👔 Senior / Líder"
-        elif a >= 10:
-            n = "🏢 Corporativo estable"
+        e = p.loc[c, "exp"]
+        nivel = ("🌱 Junior" if e < 4 else "🧑‍💻 Semi-senior" if e < 7
+                 else "👨‍💻 Senior" if e <= 15 else "🎖️ Senior +15")
+        if p.loc[c, "usd"] > 0.6:
+            rasgo = "dolarizado"
+        elif p.loc[c, "ant"] >= 10:
+            rasgo = "corporativo estable"
+        elif p.loc[c, "hib"] > 0.5:
+            rasgo = "híbrido"
+        elif p.loc[c, "pres"] > 0.4:
+            rasgo = "presencial"
         else:
-            n = "🧑‍💻 Senior consolidado"
-        if n in usados:
-            n = f"Segmento {c}"
+            rasgo = "remoto"
+        n = f"{nivel} {rasgo}"
+        if n in usados:               # desambiguar colisiones
+            n = f"{n} #{c}"
         usados.add(n)
         nombres[c] = n
     return nombres
 
 
 try:
-    df = cargar()
+    df = cargar(DATASET.stat().st_mtime)
 except FileNotFoundError:
     st.error("No encuentro el dataset. Corré antes "
              "`python notebooks/limpiar_y_unificar_datos.py`")
@@ -89,8 +96,9 @@ st.markdown(
     "del mercado tech argentino."
 )
 
-k = st.slider("Cantidad de segmentos (k)", 2, 8, 4)
-pre, km, coords = entrenar(k)
+k = st.slider("Cantidad de segmentos (k)", 2, 8, 4,
+              help="Cuántos arquetipos separar. Los nombres se recalculan al cambiar k.")
+pre, km, coords = entrenar(k, DATASET.stat().st_mtime)
 df = df.copy()
 df["cluster"] = km.labels_
 nombres = nombrar(df)
@@ -134,7 +142,7 @@ for c in range(k):
         "Antigüedad": f"{g['anos_empresa_actual'].median():.0f} años",
         "Cobra en USD": f"{g['cobra_en_dolares'].eq('True').mean()*100:.0f}%",
         "Remoto": f"{g['modalidad'].eq('100% remoto').mean()*100:.0f}%",
-        "Rol típico": g["rol"].mode().iloc[0] if len(g) else "—",
+        "Híbrido": f"{g['modalidad'].eq('híbrido').mean()*100:.0f}%",
         "Salario mediano": f"${g['salario_real_ars'].median()/1e6:.2f}M",
     })
 tabla = pd.DataFrame(filas).set_index("Segmento")
@@ -165,7 +173,7 @@ if ok:
                f"({len(g)/len(df)*100:.0f}% del mercado).")
     m1, m2, m3 = st.columns(3)
     m1.metric("Salario mediano del segmento", f"${g['salario_real_ars'].median()/1e6:.2f}M")
-    m2.metric("Rol típico", g["rol"].mode().iloc[0])
+    m2.metric("Modalidad típica", g["modalidad"].mode().iloc[0])
     m3.metric("Experiencia típica", f"{g['anos_experiencia_total'].median():.0f} años")
 
 st.caption("Clustering = aprendizaje **no supervisado**: complementa al modelo "

@@ -31,13 +31,13 @@ st.set_page_config(page_title="Argentine Tech Salary Estimator",
 
 
 @st.cache_resource(show_spinner="Training the model (first run only)…")
-def load_model():
-    # target in US dollars -> the app speaks USD natively
+def load_model(ver: float):
+    # `ver` = dataset mtime: invalidates the cache when the dataset is rebuilt.
     return pc.preparar_datos(target="salario_real_usd")
 
 
 try:
-    X, y, cols_tech, options, pre_model = load_model()
+    X, y, cols_tech, options, pre_model = load_model(pc.DATASET.stat().st_mtime)
 except FileNotFoundError:
     st.error("Dataset not found. Run "
              "`python notebooks/limpiar_y_unificar_datos.py` first.")
@@ -47,9 +47,9 @@ tech_map = dict(zip(options["tecnologias"], cols_tech))
 
 # Display labels in English for a few coded fields (data values stay as-is)
 MODALITY_EN = {"100% remoto": "100% remote", "100% presencial": "100% on-site",
-               "Híbrido (presencial y remoto)": "Hybrid"}
-GENDER_EN = {"masculino": "male", "femenino": "female", "otro": "other",
-             "no especifica": "prefer not to say"}
+               "híbrido": "Hybrid"}
+GENDER_EN = {"masculino": "male", "femenino": "female",
+             "otro / no especifica": "other / N.A."}
 
 st.title("💵 Argentine Tech Salary Estimator")
 st.caption(

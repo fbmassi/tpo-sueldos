@@ -50,7 +50,7 @@ ROL_MAP = {
 
 
 @st.cache_data(show_spinner="Cargando datos…")
-def cargar():
+def cargar(ver: float):
     so = pd.read_csv(SO_CSV, usecols=["Country", "DevType", "ConvertedCompYearly"],
                      low_memory=False)
     so = so[so["ConvertedCompYearly"].notna() & (so["ConvertedCompYearly"] > 0)].copy()
@@ -61,7 +61,7 @@ def cargar():
 
 
 try:
-    so, sysd = cargar()
+    so, sysd = cargar(DATASET.stat().st_mtime)
 except FileNotFoundError:
     st.error("No encuentro data/raw/datosInternacionales.csv")
     st.stop()
