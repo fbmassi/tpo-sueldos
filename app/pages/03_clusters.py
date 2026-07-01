@@ -29,9 +29,6 @@ DATASET = ROOT / "data" / "processed" / "dataset_final_mercado_laboral.parquet"
 NUM = ["edad", "anos_experiencia_total", "anos_empresa_actual"]
 CAT = ["modalidad", "cobra_en_dolares", "tamano_empresa"]
 
-st.set_page_config(page_title="Segmentos — Salarios Tech", page_icon="🧩",
-                   layout="wide")
-
 
 @st.cache_data(show_spinner="Cargando datos…")
 def cargar() -> pd.DataFrame:

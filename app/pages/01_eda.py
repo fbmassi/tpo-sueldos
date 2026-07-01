@@ -20,10 +20,6 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DATASET = ROOT / "data" / "processed" / "dataset_final_mercado_laboral.parquet"
 CONTEXTO = ROOT / "data" / "processed" / "contexto_macroeconomico.parquet"
 
-st.set_page_config(page_title="EDA — Salarios Tech", page_icon="📊",
-                   layout="wide")
-
-
 @st.cache_data(show_spinner="Cargando datos…")
 def cargar() -> pd.DataFrame:
     df = pd.read_parquet(DATASET)
@@ -130,40 +126,40 @@ with tab3:
         ax.set_xlabel("Salario mediano (millones $)"); ax.grid(alpha=0.3)
         st.pyplot(fig); plt.close(fig)
 
-# ---- TAB 4: evolución temporal ----
+# ---- TAB 4: evolución en el tiempo (pesos reales vs USD del momento) ----
 with tab4:
-    st.subheader("Evolución del salario real (mediana por edición)")
-    g = (df.groupby(df["fecha_edicion"].dt.date)
-         .agg(ARS=("salario_real_ars", "median"),
-              USD=("salario_real_usd", "median")))
-    c1, c2 = st.columns(2)
-    with c1:
-        st.caption("En pesos reales de mayo 2026")
-        st.line_chart(g["ARS"] / 1e6, y_label="Millones $")
-    with c2:
-        st.caption("En dólares reales de mayo 2026")
-        st.line_chart(g["USD"], y_label="USD")
-    st.info("En pesos reales el poder de compra se mantuvo ~estable, pero en "
-            "dólares reales casi se duplicó entre 2022 y 2025.")
-
-# ---- TAB 5: poder de compra en distintas varas ----
-with tab5:
-    st.subheader("¿Cuánto compra el salario, según cada vara? (base 2022.2 = 100)")
+    st.subheader("Evolución del salario en el tiempo")
     m = df.copy()
-    m["nominal"] = m["canastas_basicas"] * m["cbt"]        # nominal en pesos del mes
+    m["nominal"] = m["canastas_basicas"] * m["cbt"]        # salario nominal en pesos del mes
+    m["usd_momento"] = m["nominal"] / m["dolar_mep"]       # USD al dólar de CADA edición
     m["ratio_ripte"] = m["nominal"] / m["ripte"]
     g = (m.groupby(m["fecha_edicion"].dt.date)
-         .agg(real=("salario_real_ars", "median"),
+         .agg(pesos_real=("salario_real_ars", "median"),
+              usd_momento=("usd_momento", "median"),
               canastas=("canastas_basicas", "median"),
               ripte=("ratio_ripte", "median")))
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.caption("En **pesos reales** (deflactado por IPC, base may-2026)")
+        st.line_chart(g["pesos_real"] / 1e6, y_label="Millones $")
+    with c2:
+        st.caption("En **dólares del momento** (salario ÷ dólar de cada edición)")
+        st.line_chart(g["usd_momento"], y_label="USD del mes")
+    st.warning(
+        "**No son lo mismo:** en pesos reales el salario quedó casi estancado, pero en "
+        "dólares del momento **casi se triplicó** (USD 945 → 2.257). La diferencia es el "
+        "dólar: se atrasó frente a los salarios, sobre todo desde 2024, así que un mismo "
+        "sueldo compra cada vez más dólares.")
+
+    st.subheader("Poder de compra según cada vara (base 2022.2 = 100)")
     idx = (g / g.iloc[0] * 100).rename(columns={
-        "real": "Salario real (IPC/US CPI)",
-        "canastas": "Poder de compra (canastas CBT)",
-        "ripte": "Salario vs mercado formal (RIPTE)"})
+        "pesos_real": "Pesos reales (IPC)",
+        "usd_momento": "USD del momento",
+        "canastas": "Canastas básicas (CBT)",
+        "ripte": "vs mercado formal (RIPTE)"})
     st.line_chart(idx, y_label="Índice (2022.2 = 100)")
-    st.info("El salario tocó un pico en 2024.1 tras la devaluación (vs RIPTE saltó a 169: "
-            "los devs se despegaron del salario formal) y se recuperó hacia 2025.2. "
-            "El Big Mac se omite: su dato anual desactualizado distorsiona la serie.")
+    st.caption("El Big Mac se omite: su dato anual desactualizado distorsiona la serie.")
 
 # ---- Análisis completo (PNGs generados por eda_completo.py) ----
 eda_dir = ROOT / "data" / "processed" / "eda"

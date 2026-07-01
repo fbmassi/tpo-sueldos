@@ -20,9 +20,6 @@ import streamlit as st  # noqa: E402
 
 import predictor_cli as pc  # noqa: E402
 
-st.set_page_config(page_title="Estimador — Salarios Tech", page_icon="💰",
-                   layout="centered")
-
 
 @st.cache_resource(show_spinner="Entrenando el modelo (sólo la primera vez)…")
 def cargar_modelo():
