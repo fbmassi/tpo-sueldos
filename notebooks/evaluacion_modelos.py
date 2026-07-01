@@ -127,19 +127,11 @@ def preparar_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.Ser
     X["tamano_empresa"] = df["tamano_empresa"].fillna("No especifica")
     X["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)
 
-    # --- tecnologías: multi-hot del top 20 ---
-    listas = (df["tecnologias"].fillna("")
-              .replace("No especifica", "")
-              .str.split(",")
-              .apply(lambda ts: {t.strip() for t in ts if t.strip()}))
-    conteo = pd.Series([t for s in listas for t in s]).value_counts()
-    conteo = conteo.drop("ninguno de los anteriores", errors="ignore")
-    techs = conteo.head(TOP_TECHS).index.tolist()
-    cols_tech = []
-    for t in techs:
-        col = f"usa_{t.replace(' ', '_').replace('.', '').replace('#', 'sharp')}"
-        X[col] = listas.apply(lambda s, tt=t: int(tt in s))
-        cols_tech.append(col)
+    # NOTA: las tecnologías se EXCLUYEN del modelo. Como features individuales
+    # generaban ruido y extrapolación en perfiles atípicos ("Go" en un helpdesk)
+    # y su premium es un proxy del contexto laboral, no un efecto del lenguaje.
+    # El análisis descriptivo de tecnologías se conserva en el EDA.
+    cols_tech: list[str] = []
 
     return X, y, fechas, cols_tech
 

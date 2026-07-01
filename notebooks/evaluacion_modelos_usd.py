@@ -111,19 +111,9 @@ def preparar_features(df: pd.DataFrame):
     X["tamano_empresa"] = df["tamano_empresa"].fillna("No especifica")
     X["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)
 
-    listas = (df["tecnologias"].fillna("")
-              .replace("No especifica", "")
-              .str.split(",")
-              .apply(lambda ts: {t.strip() for t in ts if t.strip()}))
-    conteo = pd.Series([t for s in listas for t in s]).value_counts()
-    conteo = conteo.drop("ninguno de los anteriores", errors="ignore")
-    techs = conteo.head(TOP_TECHS).index.tolist()
-    cols_tech = []
-    for t in techs:
-        col = f"usa_{t.replace(' ', '_').replace('.', '').replace('#', 'sharp')}"
-        X[col] = listas.apply(lambda s, tt=t: int(tt in s))
-        cols_tech.append(col)
-
+    # Tecnologías EXCLUIDAS del modelo (ruido/extrapolación; premium = proxy del
+    # contexto). El análisis descriptivo se conserva en el EDA.
+    cols_tech: list[str] = []
     return X, y, fechas, cols_tech
 
 

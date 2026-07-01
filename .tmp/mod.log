@@ -1,16 +1,16 @@
 Dataset: 31,088 filas
-Features: 29 columnas (3 numéricas, 6 categóricas, 20 tecnologías multi-hot)
+Features: 9 columnas (3 numéricas, 6 categóricas, 0 tecnologías multi-hot)
 Split TEMPORAL: train (<2025-07-01)=27,351 / test (=2025-07-01)=3,737
 
 1. Lineal simple (solo exp.)     R²test=0.133  RMSEtest=$2.18M  overfit=0.76 (sin overfitting)
-2. Lineal múltiple               R²test=0.240  RMSEtest=$2.04M  overfit=0.76 (sin overfitting)
-3. Polinómica (g=2)              R²test=0.290  RMSEtest=$1.98M  overfit=0.76 (sin overfitting)
-4. Árbol (max_depth=5)           R²test=0.215  RMSEtest=$2.08M  overfit=0.77 (sin overfitting)
-5. Random Forest (100)           R²test=0.296  RMSEtest=$1.97M  overfit=0.84 (sin overfitting)
+2. Lineal múltiple               R²test=0.223  RMSEtest=$2.07M  overfit=0.76 (sin overfitting)
+3. Polinómica (g=2)              R²test=0.277  RMSEtest=$1.99M  overfit=0.75 (sin overfitting)
+4. Árbol (max_depth=5)           R²test=0.198  RMSEtest=$2.10M  overfit=0.77 (sin overfitting)
+5. Random Forest (100)           R²test=0.272  RMSEtest=$2.00M  overfit=0.82 (sin overfitting)
 
-🏆 MEJOR MODELO: 5. Random Forest (100) (R²test=0.296)
+🏆 MEJOR MODELO: 3. Polinómica (g=2) (R²test=0.277)
 
-Validación aleatoria estratificada (contraste): R²=0.326  RMSE=$2.42M
+Validación aleatoria estratificada (contraste): R²=0.274  RMSE=$2.51M
 
 Generando gráficos…
   ✓ modelos_comparacion_rmse.png
@@ -27,34 +27,33 @@ TABLA COMPARATIVA (split TEMPORAL — train: ediciones previas / test: 2025.2)
                              RMSE_train RMSE_test MAE_train MAE_test R2_train R2_test           Overfit_ratio
 Modelo                                                                                                       
 1. Lineal simple (solo exp.)     $2.89M    $2.18M    $1.84M   $1.61M    0.110   0.133  0.76 (sin overfitting)
-2. Lineal múltiple               $2.68M    $2.04M    $1.66M   $1.49M    0.231   0.240  0.76 (sin overfitting)
-3. Polinómica (g=2)              $2.62M    $1.98M    $1.60M   $1.44M    0.269   0.290  0.76 (sin overfitting)
-4. Árbol (max_depth=5)           $2.70M    $2.08M    $1.67M   $1.54M    0.219   0.215  0.77 (sin overfitting)
-5. Random Forest (100)           $2.33M    $1.97M    $1.40M   $1.42M    0.419   0.296  0.84 (sin overfitting)
+2. Lineal múltiple               $2.74M    $2.07M    $1.69M   $1.50M    0.200   0.223  0.76 (sin overfitting)
+3. Polinómica (g=2)              $2.67M    $1.99M    $1.63M   $1.45M    0.241   0.277  0.75 (sin overfitting)
+4. Árbol (max_depth=5)           $2.72M    $2.10M    $1.67M   $1.55M    0.208   0.198  0.77 (sin overfitting)
+5. Random Forest (100)           $2.43M    $2.00M    $1.46M   $1.45M    0.370   0.272  0.82 (sin overfitting)
 
 Tabla guardada en /Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed/resultados_modelos.csv
 
-🏆 MEJOR MODELO: 5. Random Forest (100)
-   R² test = 0.296 | MAE test = $1.42M | overfitting: sin overfitting
+🏆 MEJOR MODELO: 3. Polinómica (g=2)
+   R² test = 0.277 | MAE test = $1.45M | overfitting: sin overfitting
 
 TOP 10 FEATURES (Random Forest):
-   anos_experiencia_total              0.407
-   edad                                0.070
-   anos_empresa_actual                 0.053
-   usa_go                              0.048
-   rol_Manager / Director              0.043
-   modalidad_100% presencial           0.033
-   rol_Technical Leader                0.027
-   usa_python                          0.024
-   usa_typescript                      0.016
-   cobra_en_dolares_False              0.016
+   anos_experiencia_total              0.464
+   edad                                0.093
+   anos_empresa_actual                 0.068
+   rol_Manager / Director              0.050
+   modalidad_100% presencial           0.043
+   rol_Technical Leader                0.033
+   tamano_empresa_Más de 10000 personas 0.024
+   rol_Architect                       0.018
+   cobra_en_dolares_False              0.018
+   provincia_CABA                      0.017
 
 TEMPORAL (principal) vs ALEATORIO (contraste) — mejor modelo:
-   Temporal : R²=0.296  RMSE=$1.97M
-   Aleatorio: R²=0.326  RMSE=$2.42M
-   ⚠ El modelo rinde PEOR al predecir la edición 2025.2 sin haberla visto
-     que al mezclar épocas: hay un cambio estructural del nivel salarial
-     real entre períodos (el 'precio de mercado' de un perfil se movió).
+   Temporal : R²=0.277  RMSE=$1.99M
+   Aleatorio: R²=0.274  RMSE=$2.51M
+   ✓ Rendimiento similar: el nivel salarial real se mantuvo estable;
+     un modelo entrenado con el pasado generaliza bien al presente.
 
 Gráficos generados en /Users/francobmassi/Documents/GitHub/tpo-sueldos/data/processed/modelos/:
    - modelos_comparacion_rmse.png

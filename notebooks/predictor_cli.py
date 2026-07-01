@@ -94,20 +94,11 @@ def preparar_datos(target: str = TARGET) -> tuple[pd.DataFrame, pd.Series,
     X["tamano_empresa"] = df["tamano_empresa"].fillna("No especifica")
     X["cobra_en_dolares"] = df["cobra_en_dolares"].astype(str)
 
-    # Tecnologías: top 20 multi-hot
-    listas = (df["tecnologias"].fillna("")
-              .replace("No especifica", "")
-              .str.split(",")
-              .apply(lambda ts: {t.strip() for t in ts if t.strip()}))
-    conteo = pd.Series([t for s in listas for t in s]).value_counts()
-    conteo = conteo.drop("ninguno de los anteriores", errors="ignore")
-    techs = conteo.head(TOP_TECHS).index.tolist()
-
-    cols_tech = []
-    for t in techs:
-        col = f"usa_{t.replace(' ', '_').replace('.', '').replace('#', 'sharp')}"
-        X[col] = listas.apply(lambda s, tt=t: int(tt in s))
-        cols_tech.append(col)
+    # NOTA: las tecnologías se EXCLUYEN del modelo. Como features individuales
+    # generaban ruido y extrapolación en perfiles atípicos (p. ej. "Go" en un
+    # helpdesk); su premium es en realidad un proxy del contexto laboral. El
+    # análisis descriptivo de tecnologías se mantiene en el EDA.
+    cols_tech: list[str] = []
 
     # Entrenar Random Forest (mismos hiperparámetros que evaluacion_modelos.py)
     pre = hacer_preprocesador(cols_tech)
@@ -125,7 +116,6 @@ def preparar_datos(target: str = TARGET) -> tuple[pd.DataFrame, pd.Series,
         "tamano_empresa": sorted(X["tamano_empresa"].unique()),
         "rol": sorted(X["rol"].unique()),
         "cobra_en_dolares": ["False", "True"],
-        "tecnologias": techs,
     }
 
     return X, y, cols_tech, opciones, (pre, model)
@@ -275,21 +265,7 @@ def main() -> None:
             except ValueError:
                 print("❌ Ingrese 1 o 2.")
 
-        # Tecnologías (multi-select)
-        print("\nTecnologías (escriba los números separados por comas, o 0 para omitir):")
-        for i, tech in enumerate(opciones["tecnologias"], 1):
-            print(f"  {i:2d}. {tech}")
-        techs_input = input("Seleccionar (ej: 1,3,5): ").strip()
-        entrada["tecnologias"] = []
-        if techs_input and techs_input != "0":
-            try:
-                indices = [int(x.strip()) - 1 for x in techs_input.split(",")]
-                entrada["tecnologias"] = [opciones["tecnologias"][i]
-                                          for i in indices if 0 <= i < len(opciones["tecnologias"])]
-            except (ValueError, IndexError):
-                print("⚠ Entrada inválida. Sin tecnologías seleccionadas.")
-
-        # Predicción
+        # Predicción (el modelo ya no usa tecnologías)
         pred = hacer_prediccion(entrada, X, cols_tech, pre_model)
 
         print("\n" + "=" * 70)

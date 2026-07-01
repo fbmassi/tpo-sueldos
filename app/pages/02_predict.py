@@ -34,8 +34,6 @@ except FileNotFoundError:
              "`python notebooks/limpiar_y_unificar_datos.py`")
     st.stop()
 
-tech_map = dict(zip(opciones["tecnologias"], cols_tech))
-
 MEP_BASE = 1408.57  # dólar de mayo 2026 (base del salario real)
 SO_CSV = ROOT / "data" / "raw" / "datosInternacionales.csv"
 ROL_MAP = {
@@ -88,7 +86,6 @@ with st.form("perfil"):
     genero = c8.selectbox("Género", opciones["genero"])
     cobra = c9.radio("¿Cobra en USD?", ["No", "Sí"], horizontal=True) == "Sí"
 
-    techs = st.multiselect("Tecnologías que usás", opciones["tecnologias"])
     enviado = st.form_submit_button("Estimar salario", type="primary",
                                     width="stretch")
 
@@ -98,8 +95,6 @@ if enviado:
         "provincia": prov, "genero": genero, "modalidad": modalidad,
         "tamano_empresa": tam, "rol": rol, "cobra_en_dolares": str(cobra),
     }])
-    for nombre, col in tech_map.items():
-        fila[col] = int(nombre in techs)
 
     pre, model = pre_model
     pred = float(model.predict(pre.transform(fila))[0])
@@ -142,5 +137,5 @@ if enviado:
             st.caption("Salario predicho convertido a USD al dólar de mayo 2026 (≈1.409). "
                        "El mundo suele pagar más: otra muestra y sin ajustar por costo de vida.")
 
-    st.caption("⚠️ Estimación orientativa (R²≈0.30): el resto depende de la "
+    st.caption("⚠️ Estimación orientativa (R²≈0.27): el resto depende de la "
                "empresa, la negociación y factores no capturados.")

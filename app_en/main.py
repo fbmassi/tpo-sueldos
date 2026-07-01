@@ -43,8 +43,6 @@ except FileNotFoundError:
              "`python notebooks/limpiar_y_unificar_datos.py` first.")
     st.stop()
 
-tech_map = dict(zip(options["tecnologias"], cols_tech))
-
 # Display labels in English for a few coded fields (data values stay as-is)
 MODALITY_EN = {"100% remoto": "100% remote", "100% presencial": "100% on-site",
                "híbrido": "Hybrid"}
@@ -78,7 +76,6 @@ with st.form("profile"):
                           format_func=lambda v: GENDER_EN.get(v, v))
     paid_usd = c9.radio("Paid in USD?", ["No", "Yes"], horizontal=True) == "Yes"
 
-    techs = st.multiselect("Technologies you use", options["tecnologias"])
     submitted = st.form_submit_button("Estimate salary", type="primary",
                                       width="stretch")
 
@@ -88,8 +85,6 @@ if submitted:
         "provincia": province, "genero": gender, "modalidad": modality,
         "tamano_empresa": company, "rol": role, "cobra_en_dolares": str(paid_usd),
     }])
-    for name, col in tech_map.items():
-        row[col] = int(name in techs)
 
     pre, model = pre_model
     pred = float(model.predict(pre.transform(row))[0])
@@ -114,7 +109,7 @@ if submitted:
     if len(sim) >= 5:
         st.info(f"👥 **{len(sim):,} professionals** with the same role in "
                 f"{province} earn a median of **USD {sim.median():,.0f}**.")
-    st.caption("⚠️ Indicative estimate (R²≈0.30): the rest depends on the "
+    st.caption("⚠️ Indicative estimate (R²≈0.27): the rest depends on the "
                "company, negotiation and factors not captured by the survey.")
 
 with st.sidebar:
@@ -124,7 +119,8 @@ with st.sidebar:
         "- **Data:** 6 Sysarmy editions (2022.2 → 2025.2)\n"
         "- **Target:** gross salary in **real USD** (May 2026)\n"
         "- **Features:** age, experience, tenure, role, province, work mode, "
-        "company size, gender, paid-in-USD and 20 technologies\n"
-        "- *No* seniority (redundant with years of experience)\n\n"
+        "company size, gender, paid-in-USD\n"
+        "- *No* seniority (redundant with experience) and *no* technologies "
+        "(they were a proxy of context and added noise)\n\n"
         "🇦🇷 Spanish / ARS version: `streamlit run app/main.py`"
     )
