@@ -202,6 +202,18 @@ a.fill.solid(); a.fill.fore_color.rgb=ACC; a.line.fill.background(); a.shadow.in
 stat(s,8.4,4.55,4.2,"31.088",None,True); _,tf2=box(s,8.4,5.5,4.2,0.6)
 P(tf2,"filas finales  ·  sólo 3,8% descartado",12,GRAY,align=PP_ALIGN.CENTER,first=True)
 
+# ============ 8b LA LIMPIEZA EN NUMEROS
+s=slide(WHITE); kicker(s,"03","Foco: limpieza de datos",False); title(s,"La limpieza en números, edición por edición",False)
+img_fit(s,PRE/"limpieza_filas_bn.png",0.4,1.85,8.6,4.9)
+rect(s,9.2,1.95,3.6,4.6,BLACK,rounded=True)
+_,tf=box(s,9.45,2.2,3.15,4.2)
+P(tf,"QUÉ MUESTRA",13,ACC,bold=True,first=True,font=FH,sa=8)
+for t in ["Gris: lo que llegó crudo","Negro: lo que quedó tras limpiar",
+          "La brecha es mínima en todas las ediciones",
+          "Se descarta sólo lo crítico irrecuperable (sin salario o provincia) y errores de carga"]:
+    P(tf,t,12,WHITE,bullet=True,sa=9)
+P(tf,"Limpiar ≠ recortar: es conservar datos confiables.",12,ACC,italic=True)
+
 # ============ 9 FEATURE ENGINEERING (agregado)
 s=slide(BLACK); kicker(s,"03","Foco: feature engineering",True); title(s,"Construcción de variables — y su justificación",True)
 fe=[("Tecnologías: FUERA del modelo","su premium era proxy del contexto (backend/dólar) y como feature generaban ruido; se analizan en el EDA."),
@@ -216,6 +228,32 @@ for i,(t,d) in enumerate(fe):
     rect(s,col,yy,6.0,1.4,DCARD,rounded=True)
     _,tf=box(s,col+0.2,yy+0.16,5.65,1.15)
     P(tf,t,13.5,ACC,bold=True,first=True,font=FH,sa=3); P(tf,d,12,WHITE)
+
+# ============ 9b ROLES EN LAS ENCUESTAS (ejemplo de agrupación)
+s=slide(WHITE); kicker(s,"03","Foco: feature engineering",False); title(s,"El caso de los roles: 698 → 16 categorías",False)
+img_fit(s,PRE/"roles_pareto_bn.png",0.4,1.85,8.6,4.9)
+rect(s,9.2,1.95,3.6,4.6,BLACK,rounded=True)
+_,tf=box(s,9.45,2.2,3.15,4.2)
+P(tf,"POR QUÉ AGRUPAR",13,ACC,bold=True,first=True,font=FH,sa=8)
+for t in ["698 puestos distintos escritos de mil maneras",
+          "El top-15 cubre el 90% de los casos",
+          "683 roles suman apenas el 10% restante",
+          "Menos categorías raras → menos columnas dummy → menos overfitting"]:
+    P(tf,t,12,WHITE,bullet=True,sa=9)
+P(tf,"La curva ámbar es la cobertura acumulada.",11.5,ACC,italic=True)
+
+# ============ 9c IMPACTO DE SACAR LAS TECNOLOGIAS
+s=slide(WHITE); kicker(s,"03","Foco: feature engineering",False); title(s,"La prueba: el modelo con y sin tecnologías",False)
+img_fit(s,PRE/"fe_impacto_bn.png",0.4,1.85,8.6,4.9)
+rect(s,9.2,1.95,3.6,4.6,BLACK,rounded=True)
+_,tf=box(s,9.45,2.2,3.15,4.2)
+P(tf,"LA EVIDENCIA",13,ACC,bold=True,first=True,font=FH,sa=8)
+for t in ["Entrenamos las dos versiones y comparamos",
+          "R² casi igual: 0,297 → 0,272",
+          "Menos sobreajuste (gap train−test más chico)",
+          "Y sin disparates: «Go» en un helpdesk ya no infla la estimación"]:
+    P(tf,t,12,WHITE,bullet=True,sa=9)
+P(tf,"Decisión basada en evidencia, no en intuición.",11.5,ACC,italic=True)
 
 # ============ 10 EDA distribucion
 s=slide(WHITE); kicker(s,"04","EDA",False); title(s,"Distribución de salarios",False)
