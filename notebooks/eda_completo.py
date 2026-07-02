@@ -78,7 +78,8 @@ def fmt_m(x, _pos=None) -> str:
 # ----------------------------------------------------------------------------
 def _valor_base(path: Path, col_fecha_hint: str, col_valor_hint: str) -> float:
     """Valor de una serie cruda en el mes más cercano a FECHA_BASE."""
-    s = pd.read_csv(path)
+    from fuentes_raw import leer_csv  # cae al gemelo .parquet si falta el CSV
+    s = leer_csv(path)
     fcol = next((c for c in s.columns
                  if col_fecha_hint in c.lower() or "date" in c.lower()
                  or "tiempo" in c.lower()), s.columns[0])

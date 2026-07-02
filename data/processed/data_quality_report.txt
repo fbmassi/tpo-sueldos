@@ -1,5 +1,5 @@
 REPORTE DE CALIDAD DE DATOS — Pipeline ETL Mercado Laboral Tech AR
-Generado: 2026-07-01 18:52:15
+Generado: 2026-07-01 22:00:33
 
 ======================================================================
 FUENTE 1 — Sysarmy (multi-edición)

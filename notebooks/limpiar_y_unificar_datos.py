@@ -44,6 +44,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+# Fuentes crudas: los CSV no se versionan (.gitignore) pero cada uno tiene un
+# gemelo .parquet en data/raw/ que sí viaja con el repo. leer_csv/existe caen
+# a ese gemelo si el CSV no está (ver fuentes_raw.py).
+from fuentes_raw import existe, leer_csv
+
 try:
     from rapidfuzz import fuzz, process
 
@@ -486,7 +491,7 @@ def leer_sysarmy_crudo(path: Path) -> pd.DataFrame | None:
     mejor_df, mejor_score, mejor_skip = None, -1, 0
     for skip in range(0, 14):
         try:
-            df = pd.read_csv(path, skiprows=skip, low_memory=False)
+            df = leer_csv(path, skiprows=skip, low_memory=False)
         except Exception:
             continue
         if df.shape[1] < 3:
@@ -522,15 +527,19 @@ def _fecha_edicion_desde_nombre(nombre: str) -> pd.Timestamp | None:
 
 
 def _listar_ediciones_sysarmy() -> list[tuple[Path, pd.Timestamp]]:
-    """Busca en raw/ los CSV de ediciones ('YYYY.S - Sysarmy ...') con su fecha."""
-    ediciones = []
-    for p in sorted(RAW_DIR.glob("*.csv")):
+    """
+    Busca en raw/ las ediciones de Sysarmy con su fecha. Considera tanto los
+    CSV originales como sus gemelos .parquet versionados (leer_csv resuelve
+    cuál usar), devolviendo siempre la ruta .csv canónica sin duplicados.
+    """
+    vistos: dict[str, tuple[Path, pd.Timestamp]] = {}
+    for p in sorted(list(RAW_DIR.glob("*.csv")) + list(RAW_DIR.glob("*.parquet"))):
         if "sysarmy" not in p.name.lower():
             continue
         fecha = _fecha_edicion_desde_nombre(p.name)
-        if fecha is not None:
-            ediciones.append((p, fecha))
-    return ediciones
+        if fecha is not None and p.stem not in vistos:
+            vistos[p.stem] = (p.with_suffix(".csv"), fecha)
+    return sorted(vistos.values(), key=lambda e: e[1])
 
 
 def limpiar_sysarmy() -> pd.DataFrame | None:
@@ -540,7 +549,7 @@ def limpiar_sysarmy() -> pd.DataFrame | None:
     ediciones = _listar_ediciones_sysarmy()
     if not ediciones:
         # compatibilidad: un único archivo legacy
-        if F_SYSARMY.exists():
+        if existe(F_SYSARMY):
             ediciones = [(F_SYSARMY, FECHA_EDICION_SYSARMY)]
         else:
             log.warning("No se encontraron ediciones de Sysarmy en raw/. Se omite.")
@@ -841,12 +850,12 @@ def limpiar_serie_temporal(
     agregar_mensual: bool = False,
 ) -> pd.DataFrame | None:
     rep_seccion(f"{nombre}")
-    if not path.exists():
+    if not existe(path):
         log.warning("No se encontró %s. Se omite.", path.name)
         rep(f"ARCHIVO AUSENTE: {path.name}")
         return None
     try:
-        df = pd.read_csv(path)
+        df = leer_csv(path)
         n0 = len(df)
         col_fecha = resolver_columna(df, ["fecha", "indice_tiempo", "date",
                                           "periodo"])
@@ -937,13 +946,13 @@ def limpiar_serie_temporal(
 def limpiar_stackoverflow() -> pd.DataFrame | None:
     nombre = "Stack Overflow (Argentina)"
     rep_seccion(f"FUENTE 7 — {nombre}")
-    if not F_STACKOVERFLOW.exists():
+    if not existe(F_STACKOVERFLOW):
         log.warning("No se encontró %s (descarga manual). Se omite.",
                     F_STACKOVERFLOW.name)
         rep(f"ARCHIVO AUSENTE: {F_STACKOVERFLOW.name} (descarga manual).")
         return None
     try:
-        df = pd.read_csv(F_STACKOVERFLOW, low_memory=False)
+        df = leer_csv(F_STACKOVERFLOW, low_memory=False)
         n0 = len(df)
 
         c_country = resolver_columna(df, ["Country", "pais"])

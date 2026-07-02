@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from fuentes_raw import leer_csv  # cae al gemelo .parquet si falta el CSV
+
 ROOT = Path(__file__).resolve().parent.parent
 SO_CSV = ROOT / "data" / "raw" / "datosInternacionales.csv"
 OUT = ROOT / "data" / "processed" / "stackoverflow_mundo.parquet"
@@ -35,8 +37,8 @@ PAISES = [
 
 
 def main() -> None:
-    df = pd.read_csv(SO_CSV, usecols=["Country", "DevType", "ConvertedCompYearly"],
-                     low_memory=False)
+    df = leer_csv(SO_CSV, usecols=["Country", "DevType", "ConvertedCompYearly"],
+                  low_memory=False)
     df = df[df["ConvertedCompYearly"].notna() & (df["ConvertedCompYearly"] > 0)]
     df = df[df["Country"].isin(PAISES)].copy()
     df["DevType"] = df["DevType"].fillna("").str.lower()
