@@ -18,7 +18,9 @@ import pandas as pd
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-SO_CSV = ROOT / "data" / "raw" / "datosInternacionales.csv"
+# Agregado liviano de Stack Overflow (18 países) precomputado desde el CSV crudo
+# de 140 MB, que NO se sube a GitHub. Ver notebooks/preparar_mundo.py.
+SO_MUNDO = ROOT / "data" / "processed" / "stackoverflow_mundo.parquet"
 DATASET = ROOT / "data" / "processed" / "dataset_final_mercado_laboral.parquet"
 
 AMBAR, GRAY, BLACK, RED = "#E6A100", "#3A3A3A", "#0A0A0A", "#C0392B"
@@ -51,9 +53,7 @@ ROL_MAP = {
 
 @st.cache_data(show_spinner="Cargando datos…")
 def cargar(ver: float):
-    so = pd.read_csv(SO_CSV, usecols=["Country", "DevType", "ConvertedCompYearly"],
-                     low_memory=False)
-    so = so[so["ConvertedCompYearly"].notna() & (so["ConvertedCompYearly"] > 0)].copy()
+    so = pd.read_parquet(SO_MUNDO)
     so["mensual"] = so["ConvertedCompYearly"] / 12
     so["DevType"] = so["DevType"].fillna("").str.lower()
     df = pd.read_parquet(DATASET, columns=["salario_real_usd", "rol"])
@@ -61,9 +61,9 @@ def cargar(ver: float):
 
 
 try:
-    so, sysd = cargar(DATASET.stat().st_mtime)
+    so, sysd = cargar(SO_MUNDO.stat().st_mtime)
 except FileNotFoundError:
-    st.error("No encuentro data/raw/datosInternacionales.csv")
+    st.error("No encuentro data/processed/stackoverflow_mundo.parquet")
     st.stop()
 
 sys_ar = float(sysd["salario_real_usd"].median())

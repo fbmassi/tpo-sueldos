@@ -35,7 +35,9 @@ except FileNotFoundError:
     st.stop()
 
 MEP_BASE = 1408.57  # dólar de mayo 2026 (base del salario real)
-SO_CSV = ROOT / "data" / "raw" / "datosInternacionales.csv"
+# Agregado liviano de Stack Overflow precomputado (ver notebooks/preparar_mundo.py);
+# el CSV crudo de 140 MB no se sube a GitHub.
+SO_MUNDO = ROOT / "data" / "processed" / "stackoverflow_mundo.parquet"
 ROL_MAP = {
     "Developer": ["developer, full-stack", "developer, back-end", "developer, front-end",
                   "developer, desktop", "developer, mobile", "developer, embedded"],
@@ -50,7 +52,7 @@ ROL_MAP = {
 @st.cache_data(show_spinner=False)
 def cargar_mundo():
     try:
-        so = pd.read_csv(SO_CSV, usecols=["DevType", "ConvertedCompYearly"], low_memory=False)
+        so = pd.read_parquet(SO_MUNDO, columns=["DevType", "ConvertedCompYearly"])
     except (FileNotFoundError, ValueError):
         return None
     so = so[so["ConvertedCompYearly"].notna() & (so["ConvertedCompYearly"] > 0)].copy()
