@@ -9,6 +9,7 @@ Mirrors app/pages/03_clusters.py.
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -109,10 +110,12 @@ names = name_segments(df)
 st.subheader("Segment map")
 fig, ax = plt.subplots(figsize=(12, 6.2))
 samp = np.random.RandomState(0).choice(len(df), min(8000, len(df)), replace=False)
+# matplotlib's font has no emoji glyphs: legend uses emoji-free labels
+plain = {c: re.sub(r"[^\w\s+#/&.-]", "", n).strip() for c, n in names.items()}
 for c in range(k):
     m = df["cluster"].values[samp] == c
     ax.scatter(coords[samp][m, 0], coords[samp][m, 1], c=PALETTE[c % len(PALETTE)],
-               s=18, alpha=0.6, edgecolors="none", label=names[c])
+               s=18, alpha=0.6, edgecolors="none", label=plain[c])
 x1, x2 = np.percentile(coords[:, 0], [0.5, 99])
 y1, y2 = np.percentile(coords[:, 1], [1, 98.5])
 ax.set_xlim(x1 - 0.4, x2 + 0.4); ax.set_ylim(y1 - 0.4, y2 + 0.6)
